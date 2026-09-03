@@ -1,8 +1,24 @@
+# Dependencies
 node_modules
+
+# Build output
 dist
+
+# Environment
 .env
 .env.local
+
+# Logs
 *.log
+
+# OS
 .DS_Store
-.env
-.env.local
+
+# Android build outputs (keep source, ignore compiled)
+android/app/build/
+android/.gradle/
+android/local.properties
+
+# iOS build outputs
+ios/App/Pods/
+ios/App/App.xcworkspace/
