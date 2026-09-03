@@ -202,13 +202,13 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
       )}
 
       {/* ── Lending summary ── */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
         <SecTitle T={T}>{L.lendingSummary}</SecTitle>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
           {[
-            { l: L.pendingCollect,  v: lendPend,             c: GRN      },
-            { l: L.youStillOwe,     v: borrPend,             c: RED      },
-            { l: L.net,             v: lendPend - borrPend,  c: T.accent },
+            { l: L.pendingCollect, v: lendPend,            c: GRN      },
+            { l: L.youStillOwe,   v: borrPend,            c: RED      },
+            { l: L.net,           v: lendPend - borrPend, c: T.accent },
           ].map(x => (
             <div key={x.l}>
               <span style={{ color: T.textSecondary, fontSize: 13 }}>{x.l}: </span>
@@ -217,6 +217,172 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           ))}
         </div>
       </div>
+
+      {/* ── Sales Transaction Log ── */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
+          <span className="dm" style={{ fontWeight: 700, fontSize: 15, color: T.textPrimary }}>
+            🧾 Sales Transaction Log
+          </span>
+          <span className="mono" style={{ fontSize: 11, color: T.textMuted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 8px' }}>
+            {filtSales.length} sale{filtSales.length !== 1 ? 's' : ''} · {range[0]} → {range[1]}
+          </span>
+        </div>
+
+        {filtSales.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: T.textMuted }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>
+            <div style={{ fontSize: 13 }}>No sales in this period.</div>
+          </div>
+        ) : (
+          <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+              <thead>
+                <tr style={{ background: T.surfaceHigh }}>
+                  {['Date & Time', 'Customer', 'Items Sold', 'Method', 'Unit Price', 'Paid', 'Balance', 'Status'].map((h, i) => (
+                    <th key={i} style={{
+                      textAlign: i >= 4 ? 'right' : 'left',
+                      padding: '10px 12px', color: T.textSecondary,
+                      fontWeight: 600, borderBottom: `2px solid ${T.border}`,
+                      fontSize: 11, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.5,
+                    }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {[...filtSales]
+                  .sort((a, b) => new Date(b.date) - new Date(a.date))
+                  .map((s, idx) => (
+                  <tr key={s.id} style={{
+                    borderBottom: `1px solid ${T.border}22`,
+                    background: idx % 2 === 0 ? 'transparent' : T.surfaceHigh + '55',
+                    transition: 'background .15s',
+                  }}>
+
+                    {/* Date & Time */}
+                    <td style={{ padding: '11px 12px', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, fontFamily: 'JetBrains Mono, monospace' }}>
+                        {new Date(s.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                      </div>
+                      <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>
+                        {new Date(s.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </div>
+                    </td>
+
+                    {/* Customer */}
+                    <td style={{ padding: '11px 12px', verticalAlign: 'top' }}>
+                      <div style={{ fontWeight: 600, color: T.textPrimary }}>{s.customerName}</div>
+                      {s.contact && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{s.contact}</div>}
+                    </td>
+
+                    {/* Items sold — what was sold */}
+                    <td style={{ padding: '11px 12px', verticalAlign: 'top', maxWidth: 220 }}>
+                      {s.items.map((item, x) => (
+                        <div key={x} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: x < s.items.length - 1 ? 5 : 0 }}>
+                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: CHART_PAL[x % CHART_PAL.length], flexShrink: 0 }} />
+                          <span style={{ color: T.textPrimary, fontSize: 12, fontWeight: 500 }}>{item.productName}</span>
+                          <span style={{ fontSize: 11, color: T.textMuted, fontFamily: 'JetBrains Mono, monospace' }}>×{item.qty}</span>
+                        </div>
+                      ))}
+                      {/* Subtotal row */}
+                      <div style={{ marginTop: 7, paddingTop: 6, borderTop: `1px dashed ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 10, color: T.textMuted }}>
+                          {s.items.reduce((a, i) => a + i.qty, 0)} unit{s.items.reduce((a, i) => a + i.qty, 0) !== 1 ? 's' : ''}
+                        </span>
+                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary }}>
+                          {cur(s.totalAmount)}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Payment method */}
+                    <td style={{ padding: '11px 12px', verticalAlign: 'top' }}>
+                      <div style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 5,
+                        background: s.paymentMethod === 'cash' ? GRN + '22' : BLU + '22',
+                        border: `1px solid ${s.paymentMethod === 'cash' ? GRN : BLU}44`,
+                        borderRadius: 6, padding: '4px 8px',
+                      }}>
+                        <span style={{ fontSize: 13 }}>{s.paymentMethod === 'cash' ? '💵' : '📲'}</span>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: s.paymentMethod === 'cash' ? GRN : BLU, textTransform: 'capitalize' }}>
+                          {s.paymentMethod}
+                        </span>
+                      </div>
+                    </td>
+
+                    {/* Unit price per item */}
+                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      {s.items.map((item, x) => (
+                        <div key={x} className="mono" style={{ fontSize: 12, color: T.textSecondary, marginBottom: x < s.items.length - 1 ? 5 : 0 }}>
+                          {cur(item.unitPrice)}
+                        </div>
+                      ))}
+                    </td>
+
+                    {/* Amount paid */}
+                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      <span className="mono" style={{ color: GRN, fontWeight: 700, fontSize: 13 }}>
+                        {cur(s.amountPaid)}
+                      </span>
+                    </td>
+
+                    {/* Balance due */}
+                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      {s.balance > 0
+                        ? <span className="mono" style={{ color: RED, fontWeight: 700, fontSize: 13 }}>-{cur(s.balance)}</span>
+                        : <span style={{ color: T.textMuted, fontSize: 12 }}>—</span>
+                      }
+                    </td>
+
+                    {/* Status badge */}
+                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 6, whiteSpace: 'nowrap',
+                        background: s.status === 'Paid' ? GRN + '22' : s.status === 'Partial' ? AMB + '22' : RED + '22',
+                        color:      s.status === 'Paid' ? GRN      : s.status === 'Partial' ? AMB      : RED,
+                        border: `1px solid ${s.status === 'Paid' ? GRN : s.status === 'Partial' ? AMB : RED}44`,
+                      }}>
+                        {s.status === 'Paid' ? '✅ Paid' : s.status === 'Partial' ? '⚠️ Partial' : '🔴 Unpaid'}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+
+              {/* Summary footer */}
+              <tfoot>
+                <tr style={{ borderTop: `2px solid ${T.border}`, background: T.surfaceHigh }}>
+                  <td colSpan={2} style={{ padding: '10px 12px' }}>
+                    <span style={{ fontSize: 11, color: T.textSecondary, fontWeight: 600 }}>
+                      {filtSales.length} sales ·{' '}
+                      {filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)} units sold
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <span style={{ fontSize: 11, color: T.textMuted }}>
+                      {filtSales.filter(s => s.paymentMethod === 'cash').length} cash ·{' '}
+                      {filtSales.filter(s => s.paymentMethod === 'transfer').length} transfer
+                    </span>
+                  </td>
+                  <td colSpan={2} />
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>COLLECTED</div>
+                    <span className="mono" style={{ color: GRN, fontWeight: 700 }}>{cur(totalRev)}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>OUTSTANDING</div>
+                    <span className="mono" style={{ color: totalUncol > 0 ? RED : T.textMuted, fontWeight: 700 }}>{cur(totalUncol)}</span>
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
     </div>
   )
 }

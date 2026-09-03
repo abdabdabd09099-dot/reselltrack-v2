@@ -1,14 +1,40 @@
 // ─── AuthScreen.jsx ───────────────────────────────────────────────────────────
-// Login and Register screen shown when user is not authenticated.
-// Features: sign in, create account with live password strength meter,
-// password confirmation, show/hide password toggle, Google OAuth button.
+// Login and Register screen — fully wired:
+//   • Sign In / Create Account with Supabase Auth
+//   • Live password strength meter + confirmation
+//   • Show/hide password toggle
+//   • Forgot Password — sends reset email via Supabase
+//   • Continue with Google — OAuth redirect via Supabase
+//
+// TO ENABLE GOOGLE LOGIN:
+//   Supabase Dashboard → Authentication → Providers → Google → toggle ON
+//   Paste your Google Client ID + Secret from console.cloud.google.com
+//   Add Authorised redirect URI: https://devqrpcxaxjcxdixwitw.supabase.co/auth/v1/callback
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { signIn, signUp } from '../utils/supabase.js'
+import { signIn, signUp, sb } from '../utils/supabase.js'
 import { RED, GRN, AMB } from '../data/constants.js'
 import { buildCss } from '../utils/buildCss.js'
 
-// ── Password strength scorer ──────────────────────────────────────────────────
+// ── Forgot Password ───────────────────────────────────────────────────────────
+async function sendResetEmail(email) {
+  if (!email || !email.includes('@')) throw new Error('Enter your email address first.')
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/reset-password',
+  })
+  if (error) throw error
+}
+
+// ── Google OAuth ──────────────────────────────────────────────────────────────
+async function signInWithGoogle() {
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin },
+  })
+  if (error) throw error
+}
+
+// ── Password strength ─────────────────────────────────────────────────────────
 function getStrength(password) {
   const checks = {
     length:    password.length >= 6,
@@ -40,9 +66,9 @@ const EyeIcon = ({ visible }) => (
   </svg>
 )
 
-// ── Google Icon ───────────────────────────────────────────────────────────────
+// ── Google icon ───────────────────────────────────────────────────────────────
 const GoogleIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24">
+  <svg width="18" height="18" viewBox="0 0 24 24">
     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
     <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
@@ -50,14 +76,13 @@ const GoogleIcon = () => (
   </svg>
 )
 
-// ── Password input with show/hide toggle ──────────────────────────────────────
-function PasswordInput({ value, onChange, placeholder, borderColor, id }) {
+// ── Password input with show/hide ─────────────────────────────────────────────
+function PasswordInput({ value, onChange, placeholder, borderColor }) {
   const [visible, setVisible] = useState(false)
-  const T_muted = '#4B5268'
   return (
     <div style={{ position: 'relative' }}>
       <input
-        id={id} type={visible ? 'text' : 'password'}
+        type={visible ? 'text' : 'password'}
         value={value} onChange={onChange}
         placeholder={placeholder}
         style={{
@@ -68,16 +93,15 @@ function PasswordInput({ value, onChange, placeholder, borderColor, id }) {
           fontFamily: 'inherit', transition: 'border-color .2s',
         }}
       />
-      <button
-        type="button" onClick={() => setVisible(v => !v)}
-        style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: T_muted, display: 'flex', alignItems: 'center', padding: 2 }}>
+      <button type="button" onClick={() => setVisible(v => !v)}
+        style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#4B5268', display: 'flex', alignItems: 'center', padding: 2 }}>
         <EyeIcon visible={visible} />
       </button>
     </div>
   )
 }
 
-// ── Strength requirement tip ──────────────────────────────────────────────────
+// ── Strength tip row ──────────────────────────────────────────────────────────
 function Tip({ ok, label }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -89,30 +113,33 @@ function Tip({ ok, label }) {
 
 // ─────────────────────────────────────────────────────────────────────────────
 export default function AuthScreen({ T }) {
-  const [mode, setMode]         = useState('login')
-  const [email, setEmail]       = useState('')
-  const [name, setName]         = useState('')
+  const [mode,     setMode]     = useState('login')
+  const [email,    setEmail]    = useState('')
+  const [name,     setName]     = useState('')
   const [password, setPassword] = useState('')
-  const [confirm, setConfirm]   = useState('')
-  const [loading, setLoading]   = useState(false)
-  const [error, setError]       = useState('')
+  const [confirm,  setConfirm]  = useState('')
+  const [loading,  setLoading]  = useState(false)
+  const [gLoading, setGLoading] = useState(false)
+  const [error,    setError]    = useState('')
+  const [info,     setInfo]     = useState('')   // green/amber success messages
 
-  const strength = getStrength(password)
+  const strength       = getStrength(password)
   const passwordsMatch = password === confirm && confirm.length > 0
   const canRegister    = strength.score >= 2 && passwordsMatch && name && email
 
-  const switchMode = (m) => {
-    setMode(m); setError('')
+  const switchMode = m => {
+    setMode(m); setError(''); setInfo('')
     setPassword(''); setConfirm('')
   }
 
-  const submit = async (e) => {
+  // ── Sign in / Register ─────────────────────────────────────────────────────
+  const submit = async e => {
     e.preventDefault()
     if (mode === 'register') {
-      if (!passwordsMatch) return setError('Passwords do not match.')
+      if (!passwordsMatch)    return setError('Passwords do not match.')
       if (strength.score < 2) return setError('Password is too weak.')
     }
-    setError(''); setLoading(true)
+    setError(''); setInfo(''); setLoading(true)
     try {
       if (mode === 'login') {
         const { error: err } = await signIn(email, password)
@@ -120,16 +147,36 @@ export default function AuthScreen({ T }) {
       } else {
         const { error: err } = await signUp(email, password)
         if (err) throw err
-        else setError('CHECK_EMAIL')
+        setInfo('✉️ Check your email to confirm your account, then sign in.')
       }
     } catch (err) { setError(err.message) }
     setLoading(false)
   }
 
-  // ── Shared input style ──────────────────────────────────────────────────────
+  // ── Forgot password ────────────────────────────────────────────────────────
+  const handleForgotPassword = async () => {
+    setError(''); setInfo('')
+    try {
+      await sendResetEmail(email)
+      setInfo('✉️ Password reset email sent! Check your inbox.')
+    } catch (err) { setError(err.message) }
+  }
+
+  // ── Google OAuth ───────────────────────────────────────────────────────────
+  const handleGoogle = async () => {
+    setError(''); setGLoading(true)
+    try {
+      await signInWithGoogle()
+      // Page will redirect — no further action needed
+    } catch (err) {
+      setError(err.message)
+      setGLoading(false)
+    }
+  }
+
   const inputStyle = {
     width: '100%', background: '#0F1117', color: '#F0F2F8',
-    border: `1px solid #2E3344`, borderRadius: 8, padding: '10px 12px',
+    border: '1px solid #2E3344', borderRadius: 8, padding: '10px 12px',
     fontSize: 14, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit',
   }
   const labelStyle = { fontSize: 12, color: '#8B92A8', display: 'block', marginBottom: 5, fontWeight: 500 }
@@ -147,21 +194,34 @@ export default function AuthScreen({ T }) {
             <p style={{ color: T.textSecondary, fontSize: 13, margin: 0 }}>Your reselling business, organized.</p>
           </div>
 
-          {/* ── Tab toggle ── */}
+          {/* ── Mode tabs ── */}
           <div style={{ display: 'flex', background: T.bg, borderRadius: 10, padding: 4, marginBottom: 20, border: `1px solid ${T.border}` }}>
             {[['login', 'Sign In'], ['register', 'Create Account']].map(([m, lbl]) => (
               <button key={m} type="button" onClick={() => switchMode(m)} style={{
                 flex: 1, padding: '9px', borderRadius: 7, border: 'none', fontSize: 13,
                 fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all .15s',
                 background: mode === m ? T.accent : 'transparent',
-                color:      mode === m ? '#fff' : T.textSecondary,
+                color:      mode === m ? '#fff'   : T.textSecondary,
               }}>{lbl}</button>
             ))}
           </div>
 
+          {/* ── Google button ── */}
+          <button type="button" onClick={handleGoogle} disabled={gLoading}
+            style={{ width: '100%', padding: '11px', background: '#fff', color: '#3c4043', border: '1px solid #dadce0', borderRadius: 10, fontWeight: 600, fontSize: 14, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, fontFamily: 'inherit', marginBottom: 18, opacity: gLoading ? .6 : 1, transition: 'opacity .15s, box-shadow .15s', boxShadow: '0 1px 3px #0001' }}>
+            {gLoading ? '⏳ Redirecting…' : <><GoogleIcon /> Continue with Google</>}
+          </button>
+
+          {/* ── Divider ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+            <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}` }} />
+            <span style={{ fontSize: 12, color: T.textMuted }}>or continue with email</span>
+            <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}` }} />
+          </div>
+
           <form onSubmit={submit}>
 
-            {/* ── Register only: Name ── */}
+            {/* ── Name (register only) ── */}
             {mode === 'register' && (
               <div style={{ marginBottom: 14 }}>
                 <label style={labelStyle}>Your Name</label>
@@ -176,28 +236,22 @@ export default function AuthScreen({ T }) {
             </div>
 
             {/* ── Password ── */}
-            <div style={{ marginBottom: mode === 'register' ? 0 : 8 }}>
+            <div style={{ marginBottom: mode === 'register' ? 0 : 6 }}>
               <label style={labelStyle}>Password</label>
               <PasswordInput
                 value={password} onChange={e => setPassword(e.target.value)}
                 placeholder="Min. 6 characters"
                 borderColor={password && mode === 'register' ? strength.color || '#2E3344' : '#2E3344'}
               />
-
-              {/* ── Live strength meter (register only) ── */}
+              {/* Strength meter */}
               {mode === 'register' && password.length > 0 && (
                 <div style={{ marginTop: 10 }}>
-                  {/* Bar */}
                   <div style={{ display: 'flex', gap: 4, marginBottom: 6 }}>
                     {[0, 1, 2, 3].map(i => (
                       <div key={i} style={{ height: 4, flex: 1, borderRadius: 2, transition: 'background .3s', background: i < strength.score ? strength.color : '#2E3344' }} />
                     ))}
                   </div>
-                  {/* Label */}
-                  <div style={{ fontSize: 11, fontWeight: 600, color: strength.color, marginBottom: 8 }}>
-                    {strength.label}
-                  </div>
-                  {/* Tips */}
+                  <div style={{ fontSize: 11, fontWeight: 600, color: strength.color, marginBottom: 8 }}>{strength.label}</div>
                   <Tip ok={strength.checks.length}    label="At least 6 characters" />
                   <Tip ok={strength.checks.number}    label="Contains a number" />
                   <Tip ok={strength.checks.uppercase} label="Contains an uppercase letter" />
@@ -225,38 +279,35 @@ export default function AuthScreen({ T }) {
 
             {/* ── Forgot password (login only) ── */}
             {mode === 'login' && (
-              <div style={{ textAlign: 'right', marginBottom: 16 }}>
-                <a href="#" style={{ fontSize: 12, color: T.accent, textDecoration: 'none' }}>Forgot password?</a>
+              <div style={{ textAlign: 'right', marginBottom: 16, marginTop: 8 }}>
+                <button type="button" onClick={handleForgotPassword}
+                  style={{ background: 'none', border: 'none', fontSize: 12, color: T.accent, cursor: 'pointer', padding: 0, fontFamily: 'inherit', textDecoration: 'underline', textDecorationColor: 'transparent' }}
+                  onMouseOver={e => e.target.style.textDecorationColor = T.accent}
+                  onMouseOut={e  => e.target.style.textDecorationColor = 'transparent'}>
+                  Forgot password?
+                </button>
               </div>
             )}
 
-            {/* ── Error / success message ── */}
-            {error && error !== 'CHECK_EMAIL' && (
-              <div style={{ background: RED + '22', border: `1px solid ${RED}44`, borderRadius: 8, padding: '10px 14px', color: RED, fontSize: 13, marginBottom: 16 }}>
+            {/* ── Error message ── */}
+            {error && (
+              <div style={{ background: RED + '22', border: `1px solid ${RED}44`, borderRadius: 8, padding: '10px 14px', color: RED, fontSize: 13, marginBottom: 14 }}>
                 {error}
               </div>
             )}
-            {error === 'CHECK_EMAIL' && (
-              <div style={{ background: AMB + '22', border: `1px solid ${AMB}44`, borderRadius: 8, padding: '10px 14px', color: AMB, fontSize: 13, marginBottom: 16 }}>
-                Check your email to confirm your account, then sign in.
+
+            {/* ── Info / success message ── */}
+            {info && (
+              <div style={{ background: GRN + '22', border: `1px solid ${GRN}44`, borderRadius: 8, padding: '10px 14px', color: GRN, fontSize: 13, marginBottom: 14 }}>
+                {info}
               </div>
             )}
 
-            {/* ── Submit button ── */}
+            {/* ── Submit ── */}
             <button type="submit"
               disabled={loading || (mode === 'register' && !canRegister)}
               style={{ width: '100%', padding: '12px', background: T.accent, color: '#fff', border: 'none', borderRadius: 10, fontWeight: 700, fontSize: 15, cursor: 'pointer', fontFamily: 'inherit', opacity: (loading || (mode === 'register' && !canRegister)) ? 0.45 : 1, transition: 'opacity .15s' }}>
               {loading ? 'Please wait…' : mode === 'login' ? 'Sign In →' : 'Create Account →'}
-            </button>
-
-            {/* ── Divider + Google ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '16px 0' }}>
-              <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}` }} />
-              <span style={{ fontSize: 12, color: T.textMuted }}>or</span>
-              <hr style={{ flex: 1, border: 'none', borderTop: `1px solid ${T.border}` }} />
-            </div>
-            <button type="button" style={{ width: '100%', padding: '10px', background: 'transparent', color: T.textSecondary, border: `1px solid ${T.border}`, borderRadius: 10, fontWeight: 600, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontFamily: 'inherit' }}>
-              <GoogleIcon /> Continue with Google
             </button>
           </form>
         </div>
