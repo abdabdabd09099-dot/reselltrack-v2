@@ -12,7 +12,7 @@ import { Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
-export default function LendBorrow({ lending, setLending, borrowing, setBorrowing, userId, T, L, cur }) {
+export default function LendBorrow({ lending, setLending, borrowing, setBorrowing, userId, T, L, cur, isDemo, demoApi }) {
   const [tab,    setTab]    = useState('lending')
   const [show,   setShow]   = useState(false)
   const [saving, setSaving] = useState(false)
@@ -32,10 +32,10 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
         notes: form.notes, status: 'Pending', source: 'manual',
       }
       if (tab === 'lending') {
-        const c = await apiLending.create(entry, userId)
+        const c = isDemo ? demoApi.lending.create(entry) : await apiLending.create(entry, userId)
         setLending(ls => [{ ...entry, id: c.id }, ...ls])
       } else {
-        const c = await apiBorrowing.create(entry, userId)
+        const c = isDemo ? demoApi.borrowing.create(entry) : await apiBorrowing.create(entry, userId)
         setBorrowing(bs => [{ ...entry, id: c.id }, ...bs])
       }
       setShow(false); setForm(blank)
@@ -47,10 +47,10 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
   const settle = async (id, t) => {
     try {
       if (t === 'lending') {
-        await apiLending.settle(id)
+        isDemo ? demoApi.lending.settle(id) : await apiLending.settle(id)
         setLending(ls => ls.map(l => l.id === id ? { ...l, status: 'Settled' } : l))
       } else {
-        await apiBorrowing.settle(id)
+        isDemo ? demoApi.borrowing.settle(id) : await apiBorrowing.settle(id)
         setBorrowing(bs => bs.map(b => b.id === id ? { ...b, status: 'Settled' } : b))
       }
     } catch (e) { alert('Error: ' + e.message) }
@@ -60,8 +60,8 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
   const del = async (id, t) => {
     if (!confirm('Delete?')) return
     try {
-      if (t === 'lending') { await apiLending.delete(id); setLending(ls => ls.filter(l => l.id !== id)) }
-      else { await apiBorrowing.delete(id); setBorrowing(bs => bs.filter(b => b.id !== id)) }
+      if (t === 'lending') { isDemo ? demoApi.lending.delete(id) : await apiLending.delete(id); setLending(ls => ls.filter(l => l.id !== id)) }
+      else { isDemo ? demoApi.borrowing.delete(id) : await apiBorrowing.delete(id); setBorrowing(bs => bs.filter(b => b.id !== id)) }
     } catch (e) { alert('Error: ' + e.message) }
   }
 

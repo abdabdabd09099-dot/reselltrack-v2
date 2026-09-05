@@ -46,7 +46,7 @@ function EditTimer({ saleDate, T }) {
   )
 }
 
-export default function Sales({ products, setProducts, sales, setSales, lending, setLending, userId, T, L, cur }) {
+export default function Sales({ products, setProducts, sales, setSales, lending, setLending, userId, T, L, cur, isDemo, demoApi, onDemoLimit }) {
   const [show,    setShow]    = useState(false)
   const [editSale,setEditSale]= useState(null)   // sale being edited
   const [saving,  setSaving]  = useState(false)
@@ -207,11 +207,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           const it = form.items.find(i => i.productId === p.id)
           return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p
         }))
-        const created = await apiSales.create(sale, userId)
+        const created = isDemo ? demoApi.sales.create(sale) : await apiSales.create(sale, userId)
+        if (!created) { onDemoLimit?.(); setSaving(false); return }
         setSales(ss => [{ ...sale, id: created.id }, ...ss])
         if (rowBal > 0 && form.sendToLend) {
           const lEntry = { personName: form.customerName, contact: form.contact, amount: rowBal, date: dt, dueDate: form.dueDate || '', notes: form.notes, status: 'Pending', source: 'sale', saleId: created.id }
-          const cl     = await apiLending.create(lEntry, userId)
+          const cl = isDemo ? demoApi.lending.create(lEntry) : await apiLending.create(lEntry, userId)
           setLending(ls => [{ ...lEntry, id: cl.id }, ...ls])
         }
       }
@@ -224,9 +225,9 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   // ── Mark paid ──────────────────────────────────────────────────────────────
   const markPaid = async id => {
     try {
-      await apiSales.markPaid(id)
+      isDemo ? demoApi.sales.markPaid(id) : await apiSales.markPaid(id)
       setSales(ss => ss.map(s => s.id === id ? { ...s, amountPaid: s.totalAmount, balance: 0, status: 'Paid' } : s))
-      await apiLending.settleBySale(id).catch(() => {})
+      isDemo ? demoApi.lending.settleBySale(id) : await apiLending.settleBySale(id).catch(() => {})
       setLending(ls => ls.map(l => l.saleId === id ? { ...l, status: 'Settled' } : l))
     } catch (e) { alert('Error: ' + e.message) }
   }

@@ -10,7 +10,7 @@ import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
-export default function Expenses({ expenses, setExpenses, userId, T, L, cur }) {
+export default function Expenses({ expenses, setExpenses, userId, T, L, cur, isDemo, demoApi }) {
   const [show,   setShow]   = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -23,10 +23,10 @@ export default function Expenses({ expenses, setExpenses, userId, T, L, cur }) {
     if (!form.desc || !form.amount) return
     setSaving(true)
     try {
-      const created = await apiExpenses.create(
-        { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes },
-        userId
-      )
+      const payload = { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes }
+      const created = isDemo
+        ? demoApi.expenses.create(payload)
+        : await apiExpenses.create(payload, userId)
       setExpenses(es => [created, ...es])
       setShow(false); setForm(blank)
     } catch (e) { alert('Save failed: ' + e.message) }
@@ -36,7 +36,7 @@ export default function Expenses({ expenses, setExpenses, userId, T, L, cur }) {
   // ── Delete expense ─────────────────────────────────────────────────────────
   const del = async id => {
     if (!confirm('Delete?')) return
-    try { await apiExpenses.delete(id); setExpenses(es => es.filter(e => e.id !== id)) }
+    try { isDemo ? demoApi.expenses.delete(id) : await apiExpenses.delete(id); setExpenses(es => es.filter(e => e.id !== id)) }
     catch (e) { alert('Delete failed: ' + e.message) }
   }
 

@@ -9,7 +9,7 @@ import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
-export default function Products({ products, setProducts, userId, T, L, cur }) {
+export default function Products({ products, setProducts, userId, T, L, cur, isDemo, demoApi, onDemoLimit }) {
   const [show,   setShow]   = useState(false)
   const [editId, setEditId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -37,11 +37,12 @@ export default function Products({ products, setProducts, userId, T, L, cur }) {
         buyPrice: +form.buyPrice, sellPrice: +form.sellPrice, stock: +form.stock,
       }
       if (editId) {
-        await apiProducts.update(editId, payload)
+        isDemo ? demoApi.products.update(editId, payload) : await apiProducts.update(editId, payload)
         setProducts(ps => ps.map(p => p.id === editId ? { ...p, ...payload } : p))
       } else {
         const sku     = 'RSL-' + String(products.length + 1).padStart(4, '0')
-        const created = await apiProducts.create({ ...payload, sku }, userId)
+        const created = isDemo ? demoApi.products.create({ ...payload, sku }) : await apiProducts.create({ ...payload, sku }, userId)
+        if (!created) { onDemoLimit?.(); return }
         setProducts(ps => [created, ...ps])
       }
       setShow(false)
@@ -52,7 +53,7 @@ export default function Products({ products, setProducts, userId, T, L, cur }) {
   // ── Delete ─────────────────────────────────────────────────────────────────
   const delProd = async id => {
     if (!confirm('Delete this product?')) return
-    try { await apiProducts.delete(id); setProducts(ps => ps.filter(p => p.id !== id)) }
+    try { isDemo ? demoApi.products.delete(id) : await apiProducts.delete(id); setProducts(ps => ps.filter(p => p.id !== id)) }
     catch (e) { alert('Delete failed: ' + e.message) }
   }
 
