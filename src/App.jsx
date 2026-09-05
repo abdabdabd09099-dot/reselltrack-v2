@@ -1,31 +1,31 @@
 // ─── App.jsx ──────────────────────────────────────────────────────────────────
-// App root — handles auth, data loading, navigation, and renders each page.
-// Pages live in src/pages/ — edit them there, not here.
-// To add a new page: create src/pages/MyPage.jsx, add to NAV_ITEMS, add a
-// route in the {page === 'mypage'} block inside the <content> div.
+// App root — handles landing, demo mode, auth, data, routing, navigation.
+// Flow: Landing → Demo (optional) → Auth → Full App
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { sb, signOut, apiProducts, apiSales, apiExpenses, apiLending, apiBorrowing } from './utils/supabase.js'
 import { CURRENCIES, THEMES, LANGS, DEFAULT_SETTINGS } from './data/constants.js'
 import { loadSettings, saveSettings } from './utils/helpers.js'
 import { buildCss } from './utils/buildCss.js'
+import { useDemo, DEMO_LIMIT } from './hooks/useDemo.js'
 
 // ── Pages ─────────────────────────────────────────────────────────────────────
-import AuthScreen  from './pages/AuthScreen.jsx'
-import Dashboard   from './pages/Dashboard.jsx'
-import Products    from './pages/Products.jsx'
-import Sales       from './pages/Sales.jsx'
-import Expenses    from './pages/Expenses.jsx'
-import LendBorrow  from './pages/LendBorrow.jsx'
-import Reports     from './pages/Reports.jsx'
-import Settings    from './pages/Settings.jsx'
+import Landing       from './pages/Landing.jsx'
+import AuthScreen    from './pages/AuthScreen.jsx'
+import Dashboard     from './pages/Dashboard.jsx'
+import Products      from './pages/Products.jsx'
+import Sales         from './pages/Sales.jsx'
+import Expenses      from './pages/Expenses.jsx'
+import LendBorrow    from './pages/LendBorrow.jsx'
+import Reports       from './pages/Reports.jsx'
+import Settings      from './pages/Settings.jsx'
 
 // ── Components ────────────────────────────────────────────────────────────────
-import InstallPrompt from './components/InstallPrompt.jsx'
-import OfflineBar    from './components/OfflineBar.jsx'
+import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
+import InstallPrompt    from './components/InstallPrompt.jsx'
+import DemoLimitPrompt  from './components/DemoLimitPrompt.jsx'
 
-// ── Navigation config ─────────────────────────────────────────────────────────
-// Add new pages here — icon, label key, page ID
+// ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = L => [
   { id: 'dashboard', icon: '📊', lbl: L.dashboard  },
   { id: 'products',  icon: '📦', lbl: L.products   },
@@ -35,8 +35,6 @@ const NAV_ITEMS = L => [
   { id: 'reports',   icon: '📈', lbl: L.reports    },
   { id: 'settings',  icon: '⚙️', lbl: L.settings   },
 ]
-
-// Bottom nav (phone) — 5 items max
 const BNAV_ITEMS = L => [
   { id: 'dashboard', icon: '📊', lbl: L.home     },
   { id: 'sales',     icon: '🛍️', lbl: L.sales    },
@@ -45,74 +43,69 @@ const BNAV_ITEMS = L => [
   { id: 'settings',  icon: '⚙️', lbl: L.settings },
 ]
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
-function Spinner({ T, message }) {
-  return (
-    <>
-      <style>{buildCss(T)}</style>
-      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', background: T.bg, flexDirection: 'column', gap: 16 }}>
-        <img src="/icons/icon-96.png" alt="" style={{ width: 56, height: 56, borderRadius: 14, opacity: .85 }} />
-        <div style={{ color: T.textSecondary, fontSize: 14 }}>{message}</div>
-      </div>
-    </>
-  )
-}
-
-// ─── App root ─────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
-  // ── Auth state ─────────────────────────────────────────────────────────────
+  // ── View state: 'landing' | 'auth' | 'app' ────────────────────────────────
+  const [view,      setView]      = useState('landing')
   const [user,      setUser]      = useState(null)
   const [authReady, setAuthReady] = useState(false)
   const [loading,   setLoading]   = useState(false)
+  const [netError,  setNetError]  = useState(false)
+  const [isDemo,    setIsDemo]    = useState(false)
 
-  // ── Data state ─────────────────────────────────────────────────────────────
+  // ── Real data ──────────────────────────────────────────────────────────────
   const [products,  setProducts]  = useState([])
   const [sales,     setSales]     = useState([])
   const [expenses,  setExpenses]  = useState([])
   const [lending,   setLending]   = useState([])
   const [borrowing, setBorrowing] = useState([])
 
-  // ── UI state ───────────────────────────────────────────────────────────────
+  // ── Demo data ──────────────────────────────────────────────────────────────
+  const {
+    demoProducts, setDemoProducts, demoSales, setDemoSales,
+    demoExpenses, setDemoExpenses, demoLending, setDemoLending,
+    demoBorrowing, setDemoBorrowing, demoLimitHit, setDemoLimitHit, demoApi,
+  } = useDemo()
+
+  // ── UI ─────────────────────────────────────────────────────────────────────
   const [settings,  setSettings]  = useState(() => loadSettings(DEFAULT_SETTINGS))
   const [page,      setPage]      = useState('dashboard')
   const [slim,      setSlim]      = useState(false)
   const [mOpen,     setMOpen]     = useState(false)
   const [ww,        setWw]        = useState(window.innerWidth)
 
-  // ── Watch auth session ─────────────────────────────────────────────────────
+  // ── Watch auth ─────────────────────────────────────────────────────────────
   useEffect(() => {
     sb.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(u)
       setAuthReady(true)
+      if (u) setView('app')
     })
     const { data: { subscription } } = sb.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null)
+      const u = session?.user ?? null
+      setUser(u)
+      if (u) { setIsDemo(false); setView('app') }
     })
     return () => subscription.unsubscribe()
   }, [])
 
-  // ── Fetch all data when user logs in ───────────────────────────────────────
+  // ── Load data (real users only) ────────────────────────────────────────────
   useEffect(() => {
-    if (!user) {
-      setProducts([]); setSales([]); setExpenses([]); setLending([]); setBorrowing([])
-      return
-    }
-    setLoading(true)
+    if (!user || isDemo) return
+    setLoading(true); setNetError(false)
     Promise.all([
-      apiProducts.fetch(),
-      apiSales.fetch(),
-      apiExpenses.fetch(),
-      apiLending.fetch(),
-      apiBorrowing.fetch(),
+      apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(),
+      apiLending.fetch(), apiBorrowing.fetch(),
     ])
       .then(([p, s, e, l, b]) => {
         setProducts(p); setSales(s); setExpenses(e); setLending(l); setBorrowing(b)
       })
-      .catch(err => console.error('Data load error:', err))
+      .catch(() => setNetError(true))
       .finally(() => setLoading(false))
-  }, [user])
+  }, [user, isDemo])
 
-  // ── Responsive window width ────────────────────────────────────────────────
+  // ── Responsive ────────────────────────────────────────────────────────────
   useEffect(() => {
     const h = () => setWw(window.innerWidth)
     window.addEventListener('resize', h)
@@ -123,174 +116,201 @@ export default function App() {
   const T      = THEMES[settings.theme]       || THEMES.dark
   const L      = LANGS[settings.language]     || LANGS.en
   const curObj = CURRENCIES.find(c => c.code === settings.currencyCode) || CURRENCIES[0]
-
-  const cur = (n, compact = false) => {
+  const cur    = (n, compact = false) => {
     const v = Number(n || 0)
     if (compact && v >= 1000) return curObj.symbol + (v / 1000).toFixed(1) + 'k'
     return curObj.symbol + v.toLocaleString('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   }
-
-  // Apply CSS vars to document
   useEffect(() => {
     document.documentElement.style.setProperty('--srf', T.surface)
     document.documentElement.style.setProperty('--bdr', T.border)
   }, [T.surface, T.border])
 
-  const isTablet   = ww <= 900
-  const go         = id => { setPage(id); setMOpen(false) }
-  const biz        = settings.businessName || 'ResellTrack'
-  const shared     = { T, L, cur }
-  const userId     = user?.id
-  const navItems   = NAV_ITEMS(L)
-  const bnavItems  = BNAV_ITEMS(L)
+  // ── Navigation ─────────────────────────────────────────────────────────────
+  const isTablet  = ww <= 900
+  const go        = id => { setPage(id); setMOpen(false) }
+  const biz       = settings.businessName || 'ResellTrack'
+  const userId    = user?.id
+  const navItems  = NAV_ITEMS(L)
+  const bnavItems = BNAV_ITEMS(L)
 
-  // ── Auth check loading ─────────────────────────────────────────────────────
-  if (!authReady) return <Spinner T={T} message="Loading ResellTrack…" />
+  // ── Active data set (demo or real) ─────────────────────────────────────────
+  const P  = isDemo ? demoProducts  : products
+  const S  = isDemo ? demoSales     : sales
+  const E  = isDemo ? demoExpenses  : expenses
+  const LD = isDemo ? demoLending   : lending
+  const B  = isDemo ? demoBorrowing : borrowing
+  const setP  = isDemo ? setDemoProducts  : setProducts
+  const setS  = isDemo ? setDemoSales     : setSales
+  const setE  = isDemo ? setDemoExpenses  : setExpenses
+  const setLD = isDemo ? setDemoLending   : setLending
+  const setB  = isDemo ? setDemoBorrowing : setBorrowing
 
-  // ── Not logged in → show auth screen ──────────────────────────────────────
-  if (!user) return <><style>{buildCss(T)}</style><AuthScreen T={T} /></>
+  // ── Shared props ───────────────────────────────────────────────────────────
+  const shared = { T, L, cur }
 
-  // ── Fetching data ──────────────────────────────────────────────────────────
-  if (loading) return <Spinner T={T} message="Loading your data from Supabase…" />
+  // ── Handlers ───────────────────────────────────────────────────────────────
+  const enterDemo = () => { setIsDemo(true); setView('app') }
+  const goSignUp  = () => { setIsDemo(false); setView('auth') }
+  const goSignIn  = () => setView('auth')
 
-  // ── Main app shell ─────────────────────────────────────────────────────────
+  const handleSignOut = () => {
+    signOut()
+    setUser(null)
+    setProducts([]); setSales([]); setExpenses([]); setLending([]); setBorrowing([])
+    setView('landing')
+  }
+
+  // ── LANDING ────────────────────────────────────────────────────────────────
+  if (!authReady && !isDemo && view === 'landing') {
+    return <LoadingScreen accent={T.accent} />
+  }
+
+  if (view === 'landing') {
+    return <Landing onSignUp={goSignUp} onDemo={enterDemo} />
+  }
+
+  // ── AUTH ───────────────────────────────────────────────────────────────────
+  if (view === 'auth') {
+    return <><style>{buildCss(T)}</style><AuthScreen T={T} /></>
+  }
+
+  // ── LOADING DATA ───────────────────────────────────────────────────────────
+  if (loading) {
+    return <LoadingScreen message="Loading your data…" submessage="Fetching from Supabase cloud…" accent={T.accent} />
+  }
+
+  // ── NETWORK ERROR ──────────────────────────────────────────────────────────
+  if (netError) {
+    return (
+      <NetworkErrorScreen
+        onRetry={() => {
+          setNetError(false)
+          setLoading(true)
+          Promise.all([apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(), apiLending.fetch(), apiBorrowing.fetch()])
+            .then(([p, s, e, l, b]) => { setProducts(p); setSales(s); setExpenses(e); setLending(l); setBorrowing(b) })
+            .catch(() => setNetError(true))
+            .finally(() => setLoading(false))
+        }}
+      />
+    )
+  }
+
+  // ── MAIN APP ───────────────────────────────────────────────────────────────
   return (
     <>
       <style>{buildCss(T)}</style>
-      <OfflineBar T={T} />
+      <OfflineBanner accent={T.accent} />
+
+      {/* Demo limit prompt */}
+      {isDemo && demoLimitHit && (
+        <DemoLimitPrompt
+          T={T}
+          onSignUp={goSignUp}
+          onContinue={() => setDemoLimitHit(false)}
+        />
+      )}
 
       <div className="shell" dir={settings.language === 'ar' ? 'rtl' : 'ltr'}>
+        {isTablet && mOpen && <div className="overlay on" onClick={() => setMOpen(false)} />}
 
-        {/* ── Mobile overlay ── */}
-        {isTablet && mOpen && (
-          <div className="overlay on" onClick={() => setMOpen(false)} />
-        )}
-
-        {/* ══ SIDEBAR ══════════════════════════════════════════════════════ */}
+        {/* ══ SIDEBAR ══ */}
         <aside className={`sidebar${!isTablet && slim ? ' slim' : ''}${isTablet && mOpen ? ' open' : ''}`}>
-
-          {/* Logo + collapse button */}
           <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
             <img src="/icons/icon-72.png" alt="ResellTrack" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
             {(!slim || isTablet) && (
               <span className="dm" style={{ fontWeight: 700, fontSize: 14, color: T.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {biz}
+                {isDemo ? 'Demo Mode' : biz}
               </span>
             )}
-            {!isTablet && (
-              <button onClick={() => setSlim(s => !s)}
-                style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 15, marginLeft: 'auto', flexShrink: 0, cursor: 'pointer' }}>
-                {slim ? '▶' : '◀'}
-              </button>
-            )}
-            {isTablet && (
-              <button onClick={() => setMOpen(false)}
-                style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 22, marginLeft: 'auto', lineHeight: 1, cursor: 'pointer' }}>×</button>
-            )}
+            {!isTablet && <button onClick={() => setSlim(s => !s)} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 15, marginLeft: 'auto', flexShrink: 0, cursor: 'pointer' }}>{slim ? '▶' : '◀'}</button>}
+            {isTablet  && <button onClick={() => setMOpen(false)} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 22, marginLeft: 'auto', lineHeight: 1, cursor: 'pointer' }}>×</button>}
           </div>
 
-          {/* Nav links */}
+          {/* Demo badge */}
+          {isDemo && (!slim || isTablet) && (
+            <div style={{ margin: '10px 10px 0', background: '#F5A62318', border: '1px solid #F5A62344', borderRadius: 8, padding: '8px 12px', fontSize: 11, color: '#F5A623', textAlign: 'center', lineHeight: 1.5 }}>
+              👀 Demo Mode<br/>
+              <span style={{ color: '#64748B' }}>
+                {S.length}/{DEMO_LIMIT} sales · {P.filter(p => !p.id?.startsWith('demo-p')).length}/{DEMO_LIMIT} products
+              </span>
+            </div>
+          )}
+
           <nav style={{ flex: 1, padding: '10px 8px', overflowY: 'auto' }}>
             {navItems.map(n => (
-              <button key={n.id} onClick={() => go(n.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                  padding: '10px 12px', borderRadius: 8, marginBottom: 3,
-                  background: page === n.id ? T.accent + '22' : 'transparent',
-                  color:      page === n.id ? T.accent : T.textSecondary,
-                  fontWeight: page === n.id ? 600 : 400,
-                  border:     page === n.id ? `1px solid ${T.accent}44` : '1px solid transparent',
-                  textAlign: 'left', cursor: 'pointer',
-                }}>
+              <button key={n.id} onClick={() => go(n.id)} style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '10px 12px', borderRadius: 8, marginBottom: 3,
+                background: page === n.id ? T.accent + '22' : 'transparent',
+                color:      page === n.id ? T.accent : T.textSecondary,
+                fontWeight: page === n.id ? 600 : 400,
+                border:     page === n.id ? `1px solid ${T.accent}44` : '1px solid transparent',
+                textAlign: 'left', cursor: 'pointer',
+              }}>
                 <span style={{ fontSize: 17, flexShrink: 0 }}>{n.icon}</span>
                 {(!slim || isTablet) && <span style={{ whiteSpace: 'nowrap', fontSize: 13 }}>{n.lbl}</span>}
               </button>
             ))}
           </nav>
 
-          {/* User email + sign out */}
           <div style={{ padding: '10px 12px', borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
-            {(!slim || isTablet) && (
-              <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {user.email}
-              </div>
+            {isDemo ? (
+              <>
+                {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8 }}>Browsing in demo</div>}
+                <button onClick={goSignUp} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 8, background: '#F5A623', border: 'none', color: '#0D0F14', fontSize: 12, fontWeight: 700, cursor: 'pointer', justifyContent: 'center' }}>
+                  <span>🔓</span>{(!slim || isTablet) && <span>Create Free Account</span>}
+                </button>
+              </>
+            ) : (
+              <>
+                {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>}
+                <button onClick={handleSignOut} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSecondary, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
+                  <span>🚪</span>{(!slim || isTablet) && <span>Sign Out</span>}
+                </button>
+              </>
             )}
-            <button onClick={() => signOut()}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSecondary, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
-              <span>🚪</span>
-              {(!slim || isTablet) && <span>Sign Out</span>}
-            </button>
           </div>
         </aside>
 
-        {/* ══ MAIN CONTENT ═════════════════════════════════════════════════ */}
+        {/* ══ MAIN CONTENT ══ */}
         <div className="main-wrap">
-
-          {/* Mobile top bar */}
           {isTablet && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 40 }}>
-              <button onClick={() => setMOpen(true)}
-                style={{ background: 'none', border: 'none', color: T.textSecondary, fontSize: 24, padding: '4px 8px', cursor: 'pointer' }}>☰</button>
+              <button onClick={() => setMOpen(true)} style={{ background: 'none', border: 'none', color: T.textSecondary, fontSize: 24, padding: '4px 8px', cursor: 'pointer' }}>☰</button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <img src="/icons/icon-72.png" alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
-                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{biz}</span>
+                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{isDemo ? 'Demo Mode' : biz}</span>
               </div>
-              <span style={{ fontSize: 12, color: T.textMuted, padding: '0 8px' }}>{curObj.symbol} {curObj.code}</span>
+              <span style={{ fontSize: 12, color: T.textMuted }}>{curObj.symbol} {curObj.code}</span>
             </div>
           )}
 
-          {/* ── Page content — each page is its own file in src/pages/ ── */}
           <div className="content">
-            {page === 'dashboard' && (
-              <Dashboard
-                products={products} sales={sales} expenses={expenses}
-                lending={lending} borrowing={borrowing} {...shared}
-              />
+            {/* Demo top banner */}
+            {isDemo && (
+              <div style={{ background: '#F5A62318', border: '1px solid #F5A62344', borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+                <div style={{ fontSize: 13, color: '#F5A623', fontWeight: 600 }}>
+                  👀 Demo Mode — {S.length}/{DEMO_LIMIT} sales · {P.filter(p => !p.id?.startsWith('demo-p')).length}/{DEMO_LIMIT} products used
+                </div>
+                <button onClick={goSignUp} style={{ padding: '7px 16px', background: '#F5A623', color: '#0D0F14', border: 'none', borderRadius: 8, fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>
+                  Create Free Account →
+                </button>
+              </div>
             )}
-            {page === 'products' && (
-              <Products
-                products={products} setProducts={setProducts}
-                userId={userId} {...shared}
-              />
-            )}
-            {page === 'sales' && (
-              <Sales
-                products={products} setProducts={setProducts}
-                sales={sales} setSales={setSales}
-                lending={lending} setLending={setLending}
-                userId={userId} {...shared}
-              />
-            )}
-            {page === 'expenses' && (
-              <Expenses
-                expenses={expenses} setExpenses={setExpenses}
-                userId={userId} {...shared}
-              />
-            )}
-            {page === 'lend' && (
-              <LendBorrow
-                lending={lending} setLending={setLending}
-                borrowing={borrowing} setBorrowing={setBorrowing}
-                userId={userId} {...shared}
-              />
-            )}
-            {page === 'reports' && (
-              <Reports
-                sales={sales} expenses={expenses}
-                lending={lending} borrowing={borrowing} {...shared}
-              />
-            )}
-            {page === 'settings' && (
-              <Settings
-                settings={settings} setSettings={setSettings}
-                products={products} sales={sales} expenses={expenses}
-                lending={lending} borrowing={borrowing} {...shared}
-              />
-            )}
+
+            {/* ── Page routing ── */}
+            {page === 'dashboard' && <Dashboard products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'products'  && <Products  products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
+            {page === 'sales'     && <Sales     products={P} setProducts={setP} sales={S} setSales={setS} lending={LD} setLending={setLD} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
+            {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
+            {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
+            {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
           </div>
         </div>
 
-        {/* ══ BOTTOM NAV (phone) ═══════════════════════════════════════════ */}
+        {/* ══ BOTTOM NAV ══ */}
         <nav className="bottom-nav">
           {bnavItems.map(n => (
             <button key={n.id} onClick={() => go(n.id)} className={page === n.id ? 'on' : ''}>
@@ -300,7 +320,6 @@ export default function App() {
           ))}
         </nav>
 
-        {/* PWA install prompt */}
         <InstallPrompt T={T} />
       </div>
     </>
