@@ -3,19 +3,20 @@ name: Build Android APK
 on:
   push:
     branches: [main]
-  workflow_dispatch:   # allows manual trigger from GitHub Actions tab
+  workflow_dispatch:
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      # ── 1. Checkout repo ────────────────────────────────────────────────────
-      - name: Checkout
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       # ── 2. Setup Node ────────────────────────────────────────────────────────
-      - name: Setup Node.js
+      - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -27,64 +28,101 @@ jobs:
         with:
           java-version: 17
           distribution: temurin
+          cache: gradle
 
-      # ── 4. Install dependencies ──────────────────────────────────────────────
-      - name: Install npm dependencies
-        run: npm install
+      # ── 4. Install npm deps ──────────────────────────────────────────────────
+      - name: Install dependencies
+        run: npm ci
 
-      # ── 5. Build React app ───────────────────────────────────────────────────
-      - name: Build React (Vite)
+      # ── 5. Build React + PWA ─────────────────────────────────────────────────
+      - name: Build React app (Vite + PWA)
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON: ${{ secrets.VITE_SUPABASE_ANON }}
-        run: npm run build
+        run: |
+          npm run build
+          echo "✅ Vite build complete — dist/ ready"
+          ls -lah dist/
 
       # ── 6. Sync Capacitor ────────────────────────────────────────────────────
-      - name: Capacitor sync
-        run: npx cap sync android
+      - name: Capacitor sync (copies dist/ → android assets)
+        run: |
+          npx cap sync android
+          echo "✅ Capacitor sync complete"
 
-      # ── 7. Make gradlew executable ───────────────────────────────────────────
+      # ── 7. Setup Android SDK ─────────────────────────────────────────────────
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ── 8. Cache Gradle ──────────────────────────────────────────────────────
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: ${{ runner.os }}-gradle-
+
+      # ── 9. Make gradlew executable ───────────────────────────────────────────
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      # ── 8. Build debug APK ───────────────────────────────────────────────────
+      # ── 10. Build DEBUG APK ───────────────────────────────────────────────────
       - name: Build Debug APK
         run: |
           cd android
-          ./gradlew assembleDebug --no-daemon
+          ./gradlew assembleDebug --no-daemon --stacktrace
+          echo "✅ Debug APK built"
+          ls -lah app/build/outputs/apk/debug/
 
-      # ── 9. Upload APK as artifact ────────────────────────────────────────────
-      - name: Upload APK
+      # ── 11. Upload debug APK as artifact ──────────────────────────────────────
+      - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: ResellTrack-debug.apk
+          name: ResellTrack-debug-v${{ github.run_number }}.apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 30
+          if-no-files-found: error
 
-      # ── 10. Create GitHub Release with APK ───────────────────────────────────
-      - name: Create Release
-        if: github.ref == 'refs/heads/main'
+      # ── 12. Create GitHub Release ─────────────────────────────────────────────
+      - name: Create GitHub Release with APK
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ github.run_number }}
-          name: ResellTrack v${{ github.run_number }}
+          tag_name: v2.1.${{ github.run_number }}
+          name: ResellTrack v2.1.${{ github.run_number }}
+          draft: false
+          prerelease: false
+          generate_release_notes: false
           body: |
-            ## ResellTrack Android APK
-            Auto-built from commit ${{ github.sha }}
+            ## 📱 ResellTrack Android APK — v2.1.${{ github.run_number }}
 
-            ### What's included
-            - 📊 Dashboard with live charts
-            - 🛍️ Sales with 2-hour edit window
-            - 📦 Product catalog & stock tracking
-            - 💸 Expense tracking
-            - 🤝 Lend / Borrow ledger
-            - 📈 Reports with Sales Transaction Log
-            - ⚙️ 6 Themes, 14 Currencies, 2 Languages
-            - 🔐 Supabase Auth
+            Auto-built from commit `${{ github.sha }}`
 
-            ### Install
-            Download `ResellTrack-debug.apk` below and install on your Android device.
-            *(Enable "Install from unknown sources" in Android Settings first)*
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+            ### 🆕 What's new in v2
+            - 🏠 Landing page with live demo
+            - 👀 Demo Mode — try before you sign up (2 free records)
+            - 🎲 3D animated loading & network error screens
+            - ✏️ 2-hour edit window on sales records
+            - 🧾 Sales Transaction Log in Reports
+            - 🔐 Forgot Password + Google OAuth
+            - 🔒 Full security hardening
+            - 🔔 Offline banner + PWA install prompt
+
+            ### 📲 Install on Android
+            1. Download `ResellTrack-debug.apk` below
+            2. Open your phone's **Settings → Security**
+            3. Enable **"Install from unknown sources"**
+            4. Open the downloaded APK → Install
+            5. Open ResellTrack → Try demo or Create account
+
+            ### ⚠️ Note
+            This is a **debug build** — safe to use but unsigned.
+            A signed release APK requires a keystore (see README).
+
+            ---
+            Built with React + Vite + Capacitor + Supabase
+          files: |
+            android/app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
