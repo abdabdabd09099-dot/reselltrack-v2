@@ -20,6 +20,7 @@ import LendBorrow    from './pages/LendBorrow.jsx'
 import Reports       from './pages/Reports.jsx'
 import Settings      from './pages/Settings.jsx'
 
+import Profile       from './pages/Profile.jsx'
 // ── Components ────────────────────────────────────────────────────────────────
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
 import { startSessionWatcher, stopSessionWatcher, injectCSP } from './utils/security.js'
@@ -37,13 +38,14 @@ const NAV_ITEMS = L => [
   { id: 'lend',      icon: 'lend',      lbl: L.lendBorrow },
   { id: 'reports',   icon: 'reports',   lbl: L.reports    },
   { id: 'settings',  icon: 'settings',  lbl: L.settings   },
+  { id: 'profile',   icon: 'user',      lbl: 'Profile'    },
 ]
 const BNAV_ITEMS = L => [
   { id: 'dashboard', icon: 'dashboard', lbl: L.home     },
   { id: 'sales',     icon: 'sales',     lbl: L.sales    },
   { id: 'expenses',  icon: 'expenses',  lbl: L.expenses },
   { id: 'reports',   icon: 'reports',   lbl: L.reports  },
-  { id: 'settings',  icon: 'settings',  lbl: L.settings },
+  { id: 'profile',   icon: 'user',      lbl: 'Profile'  },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -284,16 +286,42 @@ export default function App() {
           <div style={{ padding: '10px 12px', borderTop: `1px solid ${T.border}`, flexShrink: 0 }}>
             {isDemo ? (
               <>
-                {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8 }}>Browsing in demo</div>}
-                <button onClick={goSignUp} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 8, background: '#F5A623', border: 'none', color: '#0D0F14', fontSize: 12, fontWeight: 700, cursor: 'pointer', justifyContent: 'center' }}>
-                  <span>🔓</span>{(!slim || isTablet) && <span>Create Free Account</span>}
+                {(!slim || isTablet) && (
+                  <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, textAlign: 'center' }}>
+                    👀 Demo Mode
+                  </div>
+                )}
+                <button onClick={goSignUp} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 8, background: '#F5A623', border: 'none', color: '#0D0F14', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                  <Icon name="unlock" size={13} color="#0D0F14" />
+                  {(!slim || isTablet) && <span>Create Free Account</span>}
                 </button>
               </>
             ) : (
               <>
-                {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>}
-                <button onClick={handleSignOut} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSecondary, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
-                  <span>🚪</span>{(!slim || isTablet) && <span>Sign Out</span>}
+                {/* Avatar + email — clicks to profile */}
+                <button onClick={() => go('profile')} style={{ display: 'flex', alignItems: 'center', gap: 9, width: '100%', padding: '8px 10px', borderRadius: 10, marginBottom: 7, background: page === 'profile' ? T.accent + '18' : 'transparent', border: page === 'profile' ? `1px solid ${T.accent}44` : '1px solid transparent', cursor: 'pointer', transition: 'all .15s', textAlign: 'left' }}>
+                  {/* Avatar circle with initials */}
+                  <div style={{ width: 28, height: 28, borderRadius: '50%', background: `linear-gradient(135deg, ${T.accent}, ${T.accent}88)`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#0D0F14', flexShrink: 0, fontFamily: "'DM Sans',sans-serif" }}>
+                    {user?.email?.slice(0, 2).toUpperCase()}
+                  </div>
+                  {(!slim || isTablet) && (
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: page === 'profile' ? T.accent : T.textPrimary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {user?.email?.split('@')[0]}
+                      </div>
+                      <div style={{ fontSize: 10, color: T.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {user?.email}
+                      </div>
+                    </div>
+                  )}
+                  {(!slim || isTablet) && (
+                    <Icon name="chevron-right" size={13} color={T.textMuted} />
+                  )}
+                </button>
+                {/* Sign out */}
+                <button onClick={handleSignOut} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 10px', borderRadius: 8, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSecondary, fontSize: 12, fontWeight: 500, cursor: 'pointer', transition: 'border-color .15s' }}>
+                  <Icon name="logout" size={13} color={T.textSecondary} />
+                  {(!slim || isTablet) && <span>Sign Out</span>}
                 </button>
               </>
             )}
@@ -334,6 +362,7 @@ export default function App() {
             {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
             {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'profile'   && <Profile   user={user} T={T} onSignOut={handleSignOut} />}
           </div>
         </div>
 

@@ -1,170 +1,203 @@
 // ─── Loader.jsx ───────────────────────────────────────────────────────────────
-// 3D animated screens for: loading, network error, offline states.
-// Uses CSS 3D transforms — no external libraries needed.
+// Branded loading and error screens.
+// The loader uses the ResellTrack logo icon with the circular arrow animated.
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 
-const LOADER_CSS = `
-@keyframes rt-spin {
-  0%   { transform: rotateX(0deg)   rotateY(0deg); }
-  50%  { transform: rotateX(180deg) rotateY(90deg); }
-  100% { transform: rotateX(360deg) rotateY(360deg); }
+const CSS = `
+@keyframes rt-arrow-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
-@keyframes rt-float {
-  0%,100% { transform: translateY(0px); }
-  50%      { transform: translateY(-14px); }
+@keyframes rt-logo-float {
+  0%, 100% { transform: translateY(0px) scale(1); }
+  50%       { transform: translateY(-10px) scale(1.03); }
 }
-@keyframes rt-pulse-ring {
-  0%   { transform: scale(0.8); opacity: .8; }
-  100% { transform: scale(2.2); opacity: 0; }
+@keyframes rt-glow-pulse {
+  0%, 100% { opacity: .4; transform: scale(1);   }
+  50%       { opacity: .9; transform: scale(1.15); }
 }
-@keyframes rt-dots {
-  0%,80%,100% { transform: scale(0.6); opacity:.3; }
-  40%          { transform: scale(1.1); opacity:1; }
-}
-@keyframes rt-shake {
-  0%,100% { transform: translateX(0); }
-  20%      { transform: translateX(-8px); }
-  40%      { transform: translateX(8px); }
-  60%      { transform: translateX(-5px); }
-  80%      { transform: translateX(5px); }
-}
-@keyframes rt-bar {
+@keyframes rt-bar-fill {
   0%   { width: 0%; }
-  30%  { width: 45%; }
-  60%  { width: 72%; }
-  85%  { width: 88%; }
+  20%  { width: 25%; }
+  50%  { width: 58%; }
+  80%  { width: 80%; }
   100% { width: 95%; }
 }
 @keyframes rt-fade-up {
-  from { opacity:0; transform: translateY(16px); }
-  to   { opacity:1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-.rt-cube-scene {
-  width: 72px; height: 72px;
-  perspective: 200px;
-  margin: 0 auto 28px;
+@keyframes rt-dot-bounce {
+  0%, 80%, 100% { transform: scale(.6); opacity: .3; }
+  40%            { transform: scale(1.2); opacity: 1; }
 }
-.rt-cube {
-  width: 72px; height: 72px;
+@keyframes rt-shake {
+  0%,100% { transform: translateX(0) rotate(0deg); }
+  20%      { transform: translateX(-6px) rotate(-3deg); }
+  40%      { transform: translateX(6px) rotate(3deg); }
+  60%      { transform: translateX(-4px) rotate(-2deg); }
+  80%      { transform: translateX(4px) rotate(2deg); }
+}
+@keyframes rt-ring-expand {
+  0%   { transform: scale(.8); opacity: .8; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+@keyframes rt-orbit {
+  0%   { transform: rotate(0deg) translateX(52px) rotate(0deg); }
+  100% { transform: rotate(360deg) translateX(52px) rotate(-360deg); }
+}
+
+/* Rotating arrow overlay on the icon */
+.rt-icon-wrap {
   position: relative;
-  transform-style: preserve-3d;
-  animation: rt-spin 2.4s ease-in-out infinite, rt-float 3s ease-in-out infinite;
-}
-.rt-cube-face {
-  position: absolute;
-  width: 72px; height: 72px;
-  border: 2px solid;
+  width: 96px; height: 96px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 12px;
-  font-size: 26px;
-  font-weight: 700;
-  backdrop-filter: blur(2px);
+  animation: rt-logo-float 3s ease-in-out infinite;
 }
-.rt-face-front  { transform: rotateY(  0deg) translateZ(36px); }
-.rt-face-back   { transform: rotateY(180deg) translateZ(36px); }
-.rt-face-right  { transform: rotateY( 90deg) translateZ(36px); }
-.rt-face-left   { transform: rotateY(-90deg) translateZ(36px); }
-.rt-face-top    { transform: rotateX( 90deg) translateZ(36px); }
-.rt-face-bottom { transform: rotateX(-90deg) translateZ(36px); }
-.rt-dot {
-  width: 10px; height: 10px; border-radius: 50%;
-  display: inline-block; margin: 0 4px;
+.rt-icon-img {
+  width: 80px; height: 80px;
+  border-radius: 22px;
+  object-fit: cover;
+  position: relative; z-index: 2;
+  box-shadow: 0 8px 32px #00000066;
 }
-.rt-dot:nth-child(1) { animation: rt-dots 1.2s ease-in-out infinite; }
-.rt-dot:nth-child(2) { animation: rt-dots 1.2s ease-in-out .2s infinite; }
-.rt-dot:nth-child(3) { animation: rt-dots 1.2s ease-in-out .4s infinite; }
+.rt-spin-ring {
+  position: absolute; inset: -10px;
+  border-radius: 50%;
+  border: 2.5px solid transparent;
+  border-top-color: #F5A623;
+  border-right-color: #F5A62388;
+  animation: rt-arrow-spin 1.2s linear infinite;
+  z-index: 3;
+}
+.rt-spin-ring-2 {
+  position: absolute; inset: -18px;
+  border-radius: 50%;
+  border: 1.5px solid transparent;
+  border-top-color: #F5A62344;
+  border-left-color: #F5A62322;
+  animation: rt-arrow-spin 2s linear infinite reverse;
+  z-index: 1;
+}
+.rt-glow {
+  position: absolute; inset: -8px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #F5A62322 0%, transparent 70%);
+  animation: rt-glow-pulse 2s ease-in-out infinite;
+  z-index: 0;
+}
+
+/* Orbiting dot */
+.rt-orbit-dot {
+  position: absolute; top: 50%; left: 50%;
+  width: 8px; height: 8px; margin: -4px;
+  border-radius: 50%;
+  background: #F5A623;
+  animation: rt-orbit 2s linear infinite;
+  box-shadow: 0 0 8px #F5A623;
+}
+
 .rt-bar-track {
-  width: 220px; height: 4px; border-radius: 4px;
-  margin: 20px auto 0; overflow: hidden;
+  width: 200px; height: 3px; border-radius: 3px;
+  background: #1E2333; overflow: hidden;
+  margin: 22px auto 0;
 }
 .rt-bar-fill {
-  height: 100%; border-radius: 4px;
-  animation: rt-bar 3.5s ease-out forwards;
+  height: 100%; border-radius: 3px;
+  background: linear-gradient(90deg, #F5A62355, #F5A623);
+  animation: rt-bar-fill 4s ease-out forwards;
 }
-.rt-pulse-ring {
-  position: absolute; inset: -16px;
-  border-radius: 50%; border: 2px solid;
-  animation: rt-pulse-ring 1.8s ease-out infinite;
+.rt-dot {
+  display: inline-block;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #F5A623; margin: 0 3px;
 }
-.rt-error-icon {
-  animation: rt-shake 0.6s ease-in-out, rt-float 3s ease-in-out 0.6s infinite;
-}
-.rt-fade-up { animation: rt-fade-up 0.5s ease both; }
+.rt-dot:nth-child(1) { animation: rt-dot-bounce 1.3s ease-in-out infinite; }
+.rt-dot:nth-child(2) { animation: rt-dot-bounce 1.3s ease-in-out .18s infinite; }
+.rt-dot:nth-child(3) { animation: rt-dot-bounce 1.3s ease-in-out .36s infinite; }
+.rt-fade-up { animation: rt-fade-up .5s ease both; }
 `
 
-// ── 3D Cube Loading Screen ─────────────────────────────────────────────────────
-export function LoadingScreen({ message = 'Loading ResellTrack…', submessage, accent = '#F5A623' }) {
+const TIPS = [
+  'Syncing your sales data…',
+  'Loading product catalog…',
+  'Fetching your reports…',
+  'Setting up your workspace…',
+  'Almost ready…',
+]
+
+// ── Branded Loading Screen ────────────────────────────────────────────────────
+export function LoadingScreen({ message, submessage }) {
   const [tip, setTip] = useState(0)
-  const tips = [
-    'Fetching your sales data…',
-    'Loading your product catalog…',
-    'Syncing with the cloud…',
-    'Almost ready…',
-  ]
+
   useEffect(() => {
-    const id = setInterval(() => setTip(t => (t + 1) % tips.length), 2200)
+    const id = setInterval(() => setTip(t => (t + 1) % TIPS.length), 2000)
     return () => clearInterval(id)
   }, [])
 
-  const faceStyle = {
-    borderColor: accent + '55',
-    background: `linear-gradient(135deg, #161A2488, #1E233388)`,
-    color: accent,
-  }
-
   return (
     <>
-      <style>{LOADER_CSS}</style>
+      <style>{CSS}</style>
       <div style={{
-        position: 'fixed', inset: 0, background: '#0D0F14',
+        position: 'fixed', inset: 0,
+        background: 'linear-gradient(160deg, #0D0F14 60%, #161A24 100%)',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', zIndex: 9999, padding: 24,
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}>
-        {/* 3D spinning cube */}
-        <div className="rt-cube-scene">
-          <div className="rt-cube">
-            <div className="rt-cube-face rt-face-front"  style={faceStyle}>₱</div>
-            <div className="rt-cube-face rt-face-back"   style={faceStyle}>📦</div>
-            <div className="rt-cube-face rt-face-right"  style={faceStyle}>📈</div>
-            <div className="rt-cube-face rt-face-left"   style={faceStyle}>🛍️</div>
-            <div className="rt-cube-face rt-face-top"    style={faceStyle}>💰</div>
-            <div className="rt-cube-face rt-face-bottom" style={faceStyle}>✅</div>
-          </div>
+
+        {/* ── Animated logo ── */}
+        <div className="rt-icon-wrap" style={{ marginBottom: 32 }}>
+          <div className="rt-glow" />
+          <div className="rt-spin-ring-2" />
+          <img
+            className="rt-icon-img"
+            src="/icons/icon-192.png"
+            alt="ResellTrack"
+          />
+          <div className="rt-spin-ring" />
+          <div className="rt-orbit-dot" />
         </div>
 
         {/* App name */}
-        <div className="rt-fade-up" style={{ textAlign: 'center', marginBottom: 8 }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 700, color: '#F1F5F9', letterSpacing: '-0.5px' }}>
-            Resell<span style={{ color: accent }}>Track</span>
+        <div className="rt-fade-up" style={{ textAlign: 'center' }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 24, fontWeight: 800, color: '#F1F5F9', letterSpacing: '-0.5px', marginBottom: 6 }}>
+            Resell<span style={{ color: '#F5A623' }}>Track</span>
           </div>
         </div>
 
         {/* Rotating tip */}
-        <div key={tip} className="rt-fade-up" style={{ fontSize: 13, color: '#64748B', marginBottom: 4, textAlign: 'center' }}>
-          {submessage || tips[tip]}
+        <div key={tip} className="rt-fade-up" style={{ fontSize: 13, color: '#64748B', marginBottom: 4, textAlign: 'center', minHeight: 20 }}>
+          {submessage || TIPS[tip]}
         </div>
 
         {/* Progress bar */}
-        <div className="rt-bar-track" style={{ background: '#1E2333' }}>
-          <div className="rt-bar-fill" style={{ background: `linear-gradient(90deg, ${accent}88, ${accent})` }} />
+        <div className="rt-bar-track">
+          <div className="rt-bar-fill" />
         </div>
 
         {/* Bouncing dots */}
-        <div style={{ marginTop: 28 }}>
-          <span className="rt-dot" style={{ background: accent }} />
-          <span className="rt-dot" style={{ background: accent + 'aa' }} />
-          <span className="rt-dot" style={{ background: accent + '55' }} />
+        <div style={{ marginTop: 24 }}>
+          <span className="rt-dot" />
+          <span className="rt-dot" />
+          <span className="rt-dot" />
         </div>
       </div>
     </>
   )
 }
 
-// ── Network Error Screen ───────────────────────────────────────────────────────
+// ── Network Error Screen ──────────────────────────────────────────────────────
 export function NetworkErrorScreen({ onRetry, message }) {
   const [retrying, setRetrying] = useState(false)
-  const [dots, setDots]         = useState('')
+  const [dots,     setDots]     = useState('')
+  const [rings,    setRings]    = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setRings(true), 200)
+    return () => clearTimeout(t)
+  }, [])
 
   useEffect(() => {
     if (!retrying) return
@@ -174,60 +207,68 @@ export function NetworkErrorScreen({ onRetry, message }) {
 
   const handleRetry = async () => {
     setRetrying(true)
-    setDots('.')
-    await new Promise(r => setTimeout(r, 1500))
+    await new Promise(r => setTimeout(r, 1800))
     setRetrying(false)
     onRetry?.()
   }
 
   return (
     <>
-      <style>{LOADER_CSS}</style>
+      <style>{CSS}</style>
       <div style={{
-        position: 'fixed', inset: 0, background: '#0D0F14',
+        position: 'fixed', inset: 0,
+        background: 'linear-gradient(160deg, #0D0F14 60%, #1a0f0f 100%)',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
         justifyContent: 'center', zIndex: 9999, padding: 24,
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}>
-        {/* Pulsing error icon */}
-        <div style={{ position: 'relative', width: 88, height: 88, marginBottom: 32 }}>
-          <div className="rt-pulse-ring" style={{ borderColor: '#EF444455' }} />
-          <div className="rt-pulse-ring" style={{ borderColor: '#EF444433', animationDelay: '.6s' }} />
-          <div className="rt-error-icon" style={{
-            width: 88, height: 88, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1E2333, #161A24)',
-            border: '2px solid #EF444455',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 36, position: 'relative',
-          }}>
-            📡
+
+        {/* Error icon — logo with shaking red ring */}
+        <div style={{ position: 'relative', width: 110, height: 110, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 32 }}>
+          {rings && <>
+            <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: '2px solid #EF444455', animation: 'rt-ring-expand 2s ease-out infinite' }} />
+            <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: '2px solid #EF444433', animation: 'rt-ring-expand 2s ease-out .7s infinite' }} />
+          </>}
+          <div style={{ animation: 'rt-shake 0.7s ease-in-out, rt-logo-float 3s ease-in-out 0.7s infinite' }}>
+            <img
+              src="/icons/icon-192.png" alt="ResellTrack"
+              style={{ width: 80, height: 80, borderRadius: 22, objectFit: 'cover', boxShadow: '0 0 0 3px #EF444444, 0 8px 32px #00000066' }}
+            />
           </div>
+          {/* Red spin ring */}
+          <div style={{
+            position: 'absolute', inset: -12, borderRadius: '50%',
+            border: '2.5px solid transparent',
+            borderTopColor: '#EF4444', borderRightColor: '#EF444466',
+            animation: 'rt-arrow-spin 1.5s linear infinite',
+          }} />
         </div>
 
         {/* Text */}
-        <div className="rt-fade-up" style={{ textAlign: 'center', maxWidth: 300 }}>
-          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 20, fontWeight: 700, color: '#F1F5F9', marginBottom: 10 }}>
+        <div className="rt-fade-up" style={{ textAlign: 'center', maxWidth: 320 }}>
+          <div style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 22, fontWeight: 800, color: '#F1F5F9', marginBottom: 10, letterSpacing: '-0.5px' }}>
             Connection lost
           </div>
-          <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, marginBottom: 28 }}>
-            {message || "Can't reach Supabase. Check your internet connection and try again."}
+          <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.7, marginBottom: 28 }}>
+            {message || "ResellTrack can't reach the server. Check your internet connection and try again."}
           </div>
         </div>
 
         {/* Retry button */}
         <button onClick={handleRetry} disabled={retrying}
           style={{
-            padding: '12px 32px', borderRadius: 10, border: 'none',
+            padding: '13px 36px', borderRadius: 12, border: 'none', cursor: 'pointer',
             background: retrying ? '#1E2333' : 'linear-gradient(135deg, #EF4444, #DC2626)',
-            color: '#fff', fontWeight: 700, fontSize: 15,
-            cursor: retrying ? 'not-allowed' : 'pointer',
-            fontFamily: 'inherit', transition: 'all .2s',
-            boxShadow: retrying ? 'none' : '0 4px 24px #EF444433',
+            color: '#fff', fontWeight: 700, fontSize: 15, fontFamily: 'inherit',
+            opacity: retrying ? .7 : 1, transition: 'all .2s',
+            boxShadow: retrying ? 'none' : '0 4px 20px #EF444433',
+            display: 'flex', alignItems: 'center', gap: 8,
           }}>
-          {retrying ? `Reconnecting${dots}` : '↺ Try Again'}
+          <span style={{ fontSize: 16, display: 'inline-block', animation: retrying ? 'rt-arrow-spin 1s linear infinite' : 'none', opacity: retrying ? 1 : 0 }}>↻</span>
+          {retrying ? `Reconnecting${dots}` : '↺  Try Again'}
         </button>
 
-        {/* Offline hint */}
-        <div style={{ marginTop: 20, fontSize: 12, color: '#475569', textAlign: 'center' }}>
+        <div style={{ marginTop: 16, fontSize: 12, color: '#334155' }}>
           Your cached data is still available offline
         </div>
       </div>
@@ -235,30 +276,35 @@ export function NetworkErrorScreen({ onRetry, message }) {
   )
 }
 
-// ── Offline Banner ─────────────────────────────────────────────────────────────
-export function OfflineBanner({ accent = '#F5A623' }) {
-  const [online, setOnline]   = useState(navigator.onLine)
+// ── Offline Banner ────────────────────────────────────────────────────────────
+export function OfflineBanner() {
+  const [online,   setOnline]   = useState(navigator.onLine)
   const [showBack, setShowBack] = useState(false)
 
   useEffect(() => {
     const off = () => setOnline(false)
     const on  = () => { setOnline(true); setShowBack(true); setTimeout(() => setShowBack(false), 3500) }
     window.addEventListener('offline', off)
-    window.addEventListener('online', on)
+    window.addEventListener('online',  on)
     return () => { window.removeEventListener('offline', off); window.removeEventListener('online', on) }
   }, [])
 
   if (online && !showBack) return null
 
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
-      background: online ? '#22C55E' : '#EF4444',
-      color: '#fff', textAlign: 'center', padding: '8px 16px',
-      fontSize: 13, fontWeight: 600, letterSpacing: 0.2,
-      animation: 'rt-fade-up .3s ease',
-    }}>
-      {online ? '✅ Back online — syncing your data' : '📡 You\'re offline — viewing cached data'}
-    </div>
+    <>
+      <style>{CSS}</style>
+      <div className="rt-fade-up" style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
+        background: online ? '#22C55E' : '#EF4444',
+        color: '#fff', textAlign: 'center', padding: '9px 16px',
+        fontSize: 13, fontWeight: 600, letterSpacing: 0.2,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+      }}>
+        {online
+          ? <><span style={{ fontSize: 15 }}>✅</span> Back online — syncing your data</>
+          : <><span style={{ fontSize: 15 }}>📡</span> You're offline — viewing cached data</>}
+      </div>
+    </>
   )
 }
