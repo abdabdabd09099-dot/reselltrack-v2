@@ -70,7 +70,7 @@ function Counter({ target, prefix = '', dur = 1200 }) {
 const BAR_DATA = [40, 65, 30, 80, 55, 90, 72]
 const BAR_COLORS = ['#F5A62366','#F5A62388','#F5A62366','#F5A623','#F5A62388','#F5A623cc','#F5A623bb']
 
-export default function Landing({ onSignUp, onDemo }) {
+export default function Landing({ onSignUp, onDemo, onPrivacy }) {
   const [barAnim, setBarAnim] = useState(false)
 
   useEffect(() => {
@@ -215,14 +215,24 @@ export default function Landing({ onSignUp, onDemo }) {
                 Create Free Account
               </button>
             </div>
-            <p style={{ fontSize: 11, color: '#334155', marginTop: 16 }}>Demo data lives in your browser. Nothing is saved to a server.</p>
+            <p style={{ fontSize: 11, color: '#334155', marginTop: 16 }}>
+              Demo data lives in your browser only. Nothing is saved to a server.{' '}
+              <button onClick={onPrivacy} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0 }}>Privacy Policy</button>
+            </p>
           </div>
         </div>
 
         {/* ── Footer ── */}
         <hr className="lp-divider" />
-        <div style={{ textAlign: 'center', padding: '24px', fontSize: 12, color: '#334155' }}>
-          ResellTrack © {new Date().getFullYear()} · Built for resellers worldwide
+        <div style={{ textAlign: 'center', padding: '24px', fontSize: 12, color: '#334155', display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', justifyContent: 'center' }}>
+            <button onClick={onPrivacy} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', fontSize: 12, textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>Privacy Policy</button>
+            <span style={{ color: '#252C3F' }}>·</span>
+            <span style={{ color: '#334155' }}>Data encrypted · No ads · No tracking</span>
+            <span style={{ color: '#252C3F' }}>·</span>
+            <span style={{ color: '#334155' }}>🔒 Secured by Supabase</span>
+          </div>
+          <div style={{ color: '#252C3F' }}>ResellTrack © {new Date().getFullYear()} · Built for resellers worldwide</div>
         </div>
       </div>
     </>

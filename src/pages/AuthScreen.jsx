@@ -13,6 +13,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { signIn, signUp, sb } from '../utils/supabase.js'
+import { checkRateLimit, resetRateLimit } from '../utils/security.js'
 import { RED, GRN, AMB } from '../data/constants.js'
 import { buildCss } from '../utils/buildCss.js'
 
@@ -141,12 +142,15 @@ export default function AuthScreen({ T }) {
     }
     setError(''); setInfo(''); setLoading(true)
     try {
+      checkRateLimit()   // throws if too many attempts
       if (mode === 'login') {
         const { error: err } = await signIn(email, password)
         if (err) throw err
+        resetRateLimit() // clear counter on success
       } else {
         const { error: err } = await signUp(email, password)
         if (err) throw err
+        resetRateLimit()
         setInfo('✉️ Check your email to confirm your account, then sign in.')
       }
     } catch (err) { setError(err.message) }
@@ -205,6 +209,16 @@ export default function AuthScreen({ T }) {
               }}>{lbl}</button>
             ))}
           </div>
+
+          {/* ── Privacy note ── */}
+          <p style={{ fontSize: 11, color: T.textMuted, textAlign: 'center', marginBottom: 14, lineHeight: 1.6 }}>
+            By continuing you agree to our{' '}
+            <button type="button" onClick={() => window.dispatchEvent(new CustomEvent('rt-show-privacy'))}
+              style={{ background: 'none', border: 'none', color: T.accent, cursor: 'pointer', fontSize: 11, textDecoration: 'underline', padding: 0, fontFamily: 'inherit' }}>
+              Privacy Policy
+            </button>.
+            Your data is encrypted and never shared.
+          </p>
 
           {/* ── Google button ── */}
           <button type="button" onClick={handleGoogle} disabled={gLoading}

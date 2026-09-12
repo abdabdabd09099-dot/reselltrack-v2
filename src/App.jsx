@@ -22,25 +22,28 @@ import Settings      from './pages/Settings.jsx'
 
 // ── Components ────────────────────────────────────────────────────────────────
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
+import { startSessionWatcher, stopSessionWatcher, injectCSP } from './utils/security.js'
+import PrivacyPolicy from './pages/PrivacyPolicy.jsx'
 import InstallPrompt    from './components/InstallPrompt.jsx'
+import { SessionWarning, Logo, Icon } from './components/UI.jsx'
 import DemoLimitPrompt  from './components/DemoLimitPrompt.jsx'
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = L => [
-  { id: 'dashboard', icon: '📊', lbl: L.dashboard  },
-  { id: 'products',  icon: '📦', lbl: L.products   },
-  { id: 'sales',     icon: '🛍️', lbl: L.sales      },
-  { id: 'expenses',  icon: '💸', lbl: L.expenses   },
-  { id: 'lend',      icon: '🤝', lbl: L.lendBorrow },
-  { id: 'reports',   icon: '📈', lbl: L.reports    },
-  { id: 'settings',  icon: '⚙️', lbl: L.settings   },
+  { id: 'dashboard', icon: 'dashboard', lbl: L.dashboard  },
+  { id: 'products',  icon: 'products',  lbl: L.products   },
+  { id: 'sales',     icon: 'sales',     lbl: L.sales      },
+  { id: 'expenses',  icon: 'expenses',  lbl: L.expenses   },
+  { id: 'lend',      icon: 'lend',      lbl: L.lendBorrow },
+  { id: 'reports',   icon: 'reports',   lbl: L.reports    },
+  { id: 'settings',  icon: 'settings',  lbl: L.settings   },
 ]
 const BNAV_ITEMS = L => [
-  { id: 'dashboard', icon: '📊', lbl: L.home     },
-  { id: 'sales',     icon: '🛍️', lbl: L.sales    },
-  { id: 'expenses',  icon: '💸', lbl: L.expenses },
-  { id: 'reports',   icon: '📈', lbl: L.reports  },
-  { id: 'settings',  icon: '⚙️', lbl: L.settings },
+  { id: 'dashboard', icon: 'dashboard', lbl: L.home     },
+  { id: 'sales',     icon: 'sales',     lbl: L.sales    },
+  { id: 'expenses',  icon: 'expenses',  lbl: L.expenses },
+  { id: 'reports',   icon: 'reports',   lbl: L.reports  },
+  { id: 'settings',  icon: 'settings',  lbl: L.settings },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -73,6 +76,8 @@ export default function App() {
   const [slim,      setSlim]      = useState(false)
   const [mOpen,     setMOpen]     = useState(false)
   const [ww,        setWw]        = useState(window.innerWidth)
+  const [showPrivacy, setShowPrivacy] = useState(false)
+  const [sessionWarn, setSessionWarn] = useState(false)
 
   // ── Watch auth ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -105,11 +110,29 @@ export default function App() {
       .finally(() => setLoading(false))
   }, [user, isDemo])
 
+  // ── Session watcher + CSP ─────────────────────────────────────────────────
+  useEffect(() => {
+    injectCSP()
+    if (!user || isDemo) return
+    const cleanup = startSessionWatcher({
+      onWarn:   () => setSessionWarn(true),
+      onExpire: () => { setSessionWarn(false); handleSignOut() },
+    })
+    return cleanup
+  }, [user, isDemo])
+
   // ── Responsive ────────────────────────────────────────────────────────────
   useEffect(() => {
     const h = () => setWw(window.innerWidth)
     window.addEventListener('resize', h)
     return () => window.removeEventListener('resize', h)
+  }, [])
+
+  // Listen for privacy event from AuthScreen / Landing
+  useEffect(() => {
+    const handler = () => setShowPrivacy(true)
+    window.addEventListener('rt-show-privacy', handler)
+    return () => window.removeEventListener('rt-show-privacy', handler)
   }, [])
 
   // ── Theme / language / currency ────────────────────────────────────────────
@@ -166,8 +189,12 @@ export default function App() {
     return <LoadingScreen accent={T.accent} />
   }
 
+  if (showPrivacy) {
+    return <PrivacyPolicy T={T} onBack={() => setShowPrivacy(false)} />
+  }
+
   if (view === 'landing') {
-    return <Landing onSignUp={goSignUp} onDemo={enterDemo} />
+    return <Landing onSignUp={goSignUp} onDemo={enterDemo} onPrivacy={() => setShowPrivacy(true)} />
   }
 
   // ── AUTH ───────────────────────────────────────────────────────────────────
@@ -217,14 +244,14 @@ export default function App() {
         {/* ══ SIDEBAR ══ */}
         <aside className={`sidebar${!isTablet && slim ? ' slim' : ''}${isTablet && mOpen ? ' open' : ''}`}>
           <div style={{ padding: '14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
-            <img src="/icons/icon-72.png" alt="ResellTrack" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
+            <Logo size={32} T={{ ...T, themeName: settings.theme }} showName={false} />
             {(!slim || isTablet) && (
               <span className="dm" style={{ fontWeight: 700, fontSize: 14, color: T.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isDemo ? 'Demo Mode' : biz}
+                {isDemo ? '👀 Demo' : biz}
               </span>
             )}
-            {!isTablet && <button onClick={() => setSlim(s => !s)} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 15, marginLeft: 'auto', flexShrink: 0, cursor: 'pointer' }}>{slim ? '▶' : '◀'}</button>}
-            {isTablet  && <button onClick={() => setMOpen(false)} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 22, marginLeft: 'auto', lineHeight: 1, cursor: 'pointer' }}>×</button>}
+            {!isTablet && <button onClick={() => setSlim(s => !s)} style={{ background: 'none', border: 'none', color: T.textMuted, marginLeft: 'auto', flexShrink: 0, cursor: 'pointer' }}><Icon name={slim ? 'chevron-right' : 'chevron-down'} size={15} color={T.textMuted} /></button>}
+            {isTablet  && <button onClick={() => setMOpen(false)} style={{ background: 'none', border: 'none', color: T.textMuted, marginLeft: 'auto', lineHeight: 1, cursor: 'pointer' }}><Icon name="close" size={18} color={T.textMuted} /></button>}
           </div>
 
           {/* Demo badge */}
@@ -248,7 +275,7 @@ export default function App() {
                 border:     page === n.id ? `1px solid ${T.accent}44` : '1px solid transparent',
                 textAlign: 'left', cursor: 'pointer',
               }}>
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{n.icon}</span>
+                <Icon name={n.icon} size={17} color={page === n.id ? T.accent : T.textSecondary} strokeWidth={page === n.id ? 2.2 : 1.8} />
                 {(!slim || isTablet) && <span style={{ whiteSpace: 'nowrap', fontSize: 13 }}>{n.lbl}</span>}
               </button>
             ))}
@@ -279,8 +306,8 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', background: T.surface, borderBottom: `1px solid ${T.border}`, position: 'sticky', top: 0, zIndex: 40 }}>
               <button onClick={() => setMOpen(true)} style={{ background: 'none', border: 'none', color: T.textSecondary, fontSize: 24, padding: '4px 8px', cursor: 'pointer' }}>☰</button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <img src="/icons/icon-72.png" alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
-                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{isDemo ? 'Demo Mode' : biz}</span>
+                <Logo size={26} T={{ ...T, themeName: settings.theme }} showName={false} />
+                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{isDemo ? '👀 Demo' : biz}</span>
               </div>
               <span style={{ fontSize: 12, color: T.textMuted }}>{curObj.symbol} {curObj.code}</span>
             </div>
@@ -314,13 +341,14 @@ export default function App() {
         <nav className="bottom-nav">
           {bnavItems.map(n => (
             <button key={n.id} onClick={() => go(n.id)} className={page === n.id ? 'on' : ''}>
-              <span className="bnav-i">{n.icon}</span>
+              <Icon name={n.icon} size={20} color={page === n.id ? T.accent : T.textMuted} strokeWidth={page === n.id ? 2.2 : 1.6} />
               <span>{n.lbl}</span>
             </button>
           ))}
         </nav>
 
         <InstallPrompt T={T} />
+        {sessionWarn && <SessionWarning T={T} onStay={() => { setSessionWarn(false); startSessionWatcher({ onWarn: () => setSessionWarn(true), onExpire: () => handleSignOut() }) }} onSignOut={handleSignOut} />}
       </div>
     </>
   )

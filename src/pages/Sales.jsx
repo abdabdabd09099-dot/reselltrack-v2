@@ -6,7 +6,7 @@ import { useState, useEffect } from 'react'
 import { apiSales, apiProducts, apiLending, sb } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 
 const Lbl = Field
 
@@ -359,19 +359,24 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               : s.status === 'Partial'
                 ? <Badge color={AMB}>{L.partial}</Badge>
                 : <Badge color={RED}>{L.unpaid}</Badge>,
-            // Actions column — edit timer + mark paid
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-start' }}>
-              {isEditable(s) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Btn small outline color={AMB} onClick={() => openEdit(s)}>✏️ Edit</Btn>
+            // Actions column — edit + delete timer + mark paid
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
+              {isEditable(s) ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <Btn small outline color={AMB} icon="edit" onClick={() => openEdit(s)}>Edit</Btn>
+                    <Btn small outline color={RED} icon="trash" onClick={() => deleteSale(s)}>Del</Btn>
+                  </div>
                   <EditTimer saleDate={s.date} T={T} />
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.textMuted, fontSize: 11 }}>
+                  <Icon name="lock" size={11} color={T.textMuted} />
+                  <span>Locked</span>
                 </div>
               )}
               {s.status !== 'Paid' && (
-                <Btn small color={GRN} onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
-              )}
-              {s.status === 'Paid' && !isEditable(s) && (
-                <span style={{ color: T.textMuted, fontSize: 12 }}>🔒 Locked</span>
+                <Btn small color="#22C55E" icon="check" onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
               )}
             </div>,
           ])}
