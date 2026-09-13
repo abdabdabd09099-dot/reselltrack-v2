@@ -24,6 +24,8 @@ import Profile       from './pages/Profile.jsx'
 // ── Components ────────────────────────────────────────────────────────────────
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
 import { startSessionWatcher, stopSessionWatcher, injectCSP } from './utils/security.js'
+import { startAutoSync, saveOffline, countPending } from './utils/offlineQueue.js'
+import SyncBadge from './components/SyncBadge.jsx'
 import PrivacyPolicy from './pages/PrivacyPolicy.jsx'
 import InstallPrompt    from './components/InstallPrompt.jsx'
 import { SessionWarning, Logo, Icon } from './components/UI.jsx'
@@ -80,6 +82,7 @@ export default function App() {
   const [ww,        setWw]        = useState(window.innerWidth)
   const [showPrivacy, setShowPrivacy] = useState(false)
   const [sessionWarn, setSessionWarn] = useState(false)
+  const [syncResult,  setSyncResult]  = useState(null)
 
   // ── Watch auth ─────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -112,15 +115,20 @@ export default function App() {
       .finally(() => setLoading(false))
   }, [user, isDemo])
 
-  // ── Session watcher + CSP ─────────────────────────────────────────────────
+  // ── Session watcher + CSP + auto-sync ───────────────────────────────────────
   useEffect(() => {
     injectCSP()
     if (!user || isDemo) return
+    // Start offline auto-sync
+    const stopSync = startAutoSync(user.id, (result) => {
+      setSyncResult(result)
+      setTimeout(() => setSyncResult(null), 4000)
+    })
     const cleanup = startSessionWatcher({
       onWarn:   () => setSessionWarn(true),
       onExpire: () => { setSessionWarn(false); handleSignOut() },
     })
-    return cleanup
+    return () => { cleanup(); stopSync() }
   }, [user, isDemo])
 
   // ── Responsive ────────────────────────────────────────────────────────────
@@ -377,6 +385,14 @@ export default function App() {
         </nav>
 
         <InstallPrompt T={T} />
+        {!isDemo && user && <SyncBadge userId={user.id} T={T} onSynced={r => setSyncResult(r)} />}
+        {/* Sync success toast */}
+        {syncResult && syncResult.synced > 0 && (
+          <div style={{ position: 'fixed', top: 60, right: 16, zIndex: 400, background: '#22C55E', color: '#fff', borderRadius: 10, padding: '10px 16px', fontSize: 13, fontWeight: 600, boxShadow: '0 4px 20px #22C55E44', display: 'flex', alignItems: 'center', gap: 8, animation: 'fadeIn .3s ease' }}>
+            <Icon name="check" size={14} color="#fff" strokeWidth={2.5} />
+            {syncResult.synced} record{syncResult.synced !== 1 ? 's' : ''} synced to cloud!
+          </div>
+        )}
         {sessionWarn && <SessionWarning T={T} onStay={() => { setSessionWarn(false); startSessionWatcher({ onWarn: () => setSessionWarn(true), onExpire: () => handleSignOut() }) }} onSignOut={handleSignOut} />}
       </div>
     </>
