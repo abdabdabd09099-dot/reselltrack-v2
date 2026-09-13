@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { apiSales, apiProducts, apiLending, sb } from '../utils/supabase.js'
+import { saveOffline } from '../utils/offlineQueue.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
@@ -207,8 +208,17 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           const it = form.items.find(i => i.productId === p.id)
           return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p
         }))
-        const created = isDemo ? demoApi.sales.create(sale) : await apiSales.create(sale, userId)
-        if (!created) { onDemoLimit?.(); setSaving(false); return }
+        let created
+        if (isDemo) {
+          created = demoApi.sales.create(sale)
+          if (!created) { onDemoLimit?.(); setSaving(false); return }
+        } else if (!navigator.onLine) {
+          // ── OFFLINE: save to IndexedDB queue ────────────────────────────
+          created = await saveOffline('sales', { ...sale, userId })
+          alert('📡 You are offline. Sale saved locally and will sync when you reconnect.')
+        } else {
+          created = await apiSales.create(sale, userId)
+        }
         setSales(ss => [{ ...sale, id: created.id }, ...ss])
         if (rowBal > 0 && form.sendToLend) {
           const lEntry = { personName: form.customerName, contact: form.contact, amount: rowBal, date: dt, dueDate: form.dueDate || '', notes: form.notes, status: 'Pending', source: 'sale', saleId: created.id }
@@ -220,6 +230,36 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       setShow(false); setForm(mkBlank())
     } catch (e) { alert('Save failed: ' + e.message) }
     setSaving(false)
+  }
+
+  // ── Delete sale (within 2-hour window) ───────────────────────────────────
+  const deleteSale = async (s) => {
+    if (!isEditable(s)) return
+    if (!confirm('Delete this sale to ' + s.customerName + '? Stock will be restored. This cannot be undone.')) return
+    try {
+      if (isDemo) {
+        setDemoSales?.(ss => ss.filter(x => x.id !== s.id))
+        setSales(ss => ss.filter(x => x.id !== s.id))
+      } else {
+        // Delete sale items then sale
+        await sb.from('sale_items').delete().eq('sale_id', s.id)
+        await sb.from('sales').delete().eq('id', s.id)
+        // Restore stock for each item
+        for (const item of s.items) {
+          const prod = products.find(p => p.id === item.productId)
+          if (prod) {
+            await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
+          }
+        }
+        setProducts(ps => ps.map(p => {
+          const it = s.items.find(i => i.productId === p.id)
+          return it ? { ...p, stock: p.stock + it.qty } : p
+        }))
+        setSales(ss => ss.filter(x => x.id !== s.id))
+        // Remove linked lending entry
+        setLending(ls => ls.filter(l => l.saleId !== s.id))
+      }
+    } catch (e) { alert('Delete failed: ' + e.message) }
   }
 
   // ── Mark paid ──────────────────────────────────────────────────────────────

@@ -122,26 +122,36 @@ export const Btn = ({ onClick, color = '#F5A623', outline, danger, children, sty
 export const Modal = ({ title, onClose, children, wide, T }) => (
   <div onClick={onClose} className="fade-in" style={{
     position: 'fixed', inset: 0, background: '#000000bb',
-    zIndex: 200, display: 'flex', alignItems: 'center',
-    justifyContent: 'center', padding: 16, backdropFilter: 'blur(4px)',
+    zIndex: 200, display: 'flex', alignItems: 'flex-end',
+    justifyContent: 'center', backdropFilter: 'blur(4px)',
   }}>
     <div onClick={e => e.stopPropagation()} style={{
       background: T.surface, border: `1px solid ${T.border}`,
-      borderRadius: 16, padding: 24, width: '100%',
-      maxWidth: wide ? 680 : 500, maxHeight: '90vh', overflowY: 'auto',
-      boxShadow: '0 24px 64px #00000088',
+      borderRadius: '20px 20px 0 0',
+      width: '100%', maxWidth: wide ? 720 : 540,
+      maxHeight: '94vh',
+      display: 'flex', flexDirection: 'column',
+      boxShadow: '0 -8px 48px #00000088',
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+      {/* Drag handle */}
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+        <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border }} />
+      </div>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 12px', borderBottom: '1px solid ' + T.border, flexShrink: 0 }}>
         <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary }}>{title}</span>
         <button onClick={onClose} style={{
           background: T.surfaceHigh, border: 'none', borderRadius: 8,
           width: 32, height: 32, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', cursor: 'pointer', color: T.textSecondary,
+          justifyContent: 'center', cursor: 'pointer',
         }}>
           <Icon name="close" size={16} color={T.textSecondary} />
         </button>
       </div>
-      {children}
+      {/* Scrollable body */}
+      <div style={{ overflowY: 'auto', padding: '16px 20px 32px', flex: 1, WebkitOverflowScrolling: 'touch' }}>
+        {children}
+      </div>
     </div>
   </div>
 )

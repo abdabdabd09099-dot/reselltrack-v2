@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { apiExpenses } from '../utils/supabase.js'
+import { saveOffline } from '../utils/offlineQueue.js'
 import { RED, AMB, BLU, PUR, EXP_CATS } from '../data/constants.js'
 import { todayStr, fmtD, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
@@ -24,9 +25,15 @@ export default function Expenses({ expenses, setExpenses, userId, T, L, cur, isD
     setSaving(true)
     try {
       const payload = { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes }
-      const created = isDemo
-        ? demoApi.expenses.create(payload)
-        : await apiExpenses.create(payload, userId)
+      let created
+      if (isDemo) {
+        created = demoApi.expenses.create(payload)
+      } else if (!navigator.onLine) {
+        created = await saveOffline('expenses', { ...payload, userId })
+        alert('📡 Offline. Expense saved locally and will sync when you reconnect.')
+      } else {
+        created = await apiExpenses.create(payload, userId)
+      }
       setExpenses(es => [created, ...es])
       setShow(false); setForm(blank)
     } catch (e) { alert('Save failed: ' + e.message) }
