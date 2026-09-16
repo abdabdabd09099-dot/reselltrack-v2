@@ -129,27 +129,35 @@ export const Modal = ({ title, onClose, children, wide, T }) => (
       background: T.surface, border: `1px solid ${T.border}`,
       borderRadius: '20px 20px 0 0',
       width: '100%', maxWidth: wide ? 720 : 540,
-      maxHeight: '94vh',
+      /* Start tall — 92vh so form fills most of the screen on phone */
+      height: '92vh',
       display: 'flex', flexDirection: 'column',
       boxShadow: '0 -8px 48px #00000088',
+      animation: 'slideUpSheet .28s cubic-bezier(.32,1,.25,1) both',
     }}>
       {/* Drag handle */}
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
-        <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border }} />
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 0 2px', flexShrink: 0 }}>
+        <div style={{ width: 36, height: 4, borderRadius: 2, background: T.border }} />
       </div>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 20px 12px', borderBottom: '1px solid ' + T.border, flexShrink: 0 }}>
-        <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary }}>{title}</span>
+      {/* Header — fixed, never scrolls */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 16px 10px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+        <span className="dm" style={{ fontSize: 16, fontWeight: 700, color: T.textPrimary }}>{title}</span>
         <button onClick={onClose} style={{
           background: T.surfaceHigh, border: 'none', borderRadius: 8,
-          width: 32, height: 32, display: 'flex', alignItems: 'center',
+          width: 30, height: 30, display: 'flex', alignItems: 'center',
           justifyContent: 'center', cursor: 'pointer',
         }}>
-          <Icon name="close" size={16} color={T.textSecondary} />
+          <Icon name="close" size={15} color={T.textSecondary} />
         </button>
       </div>
-      {/* Scrollable body */}
-      <div style={{ overflowY: 'auto', padding: '16px 20px 32px', flex: 1, WebkitOverflowScrolling: 'touch' }}>
+      {/* Scrollable body — takes all remaining space */}
+      <div style={{
+        overflowY: 'auto', flex: 1,
+        padding: '12px 16px 40px',
+        WebkitOverflowScrolling: 'touch',
+        /* Prevent content jumping when keyboard appears on mobile */
+        overscrollBehavior: 'contain',
+      }}>
         {children}
       </div>
     </div>

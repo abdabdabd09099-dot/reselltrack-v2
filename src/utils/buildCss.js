@@ -70,6 +70,11 @@ export const buildCss = T => `
   .icon-lg svg { width: 24px; height: 24px; }
 
   /* ── Animations ── */
+  @keyframes slideUpSheet {
+    from { transform: translateY(100%); opacity: 0.6; }
+    to   { transform: translateY(0);    opacity: 1;   }
+  }
+
   @keyframes fadeIn {
     from { opacity: 0; transform: translateY(8px); }
     to   { opacity: 1; transform: translateY(0); }
