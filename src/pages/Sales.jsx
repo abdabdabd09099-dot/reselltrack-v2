@@ -4,10 +4,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { apiSales, apiProducts, apiLending, sb } from '../utils/supabase.js'
-import { saveOffline } from '../utils/offlineQueue.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
@@ -47,7 +46,7 @@ function EditTimer({ saleDate, T }) {
   )
 }
 
-export default function Sales({ products, setProducts, sales, setSales, lending, setLending, userId, T, L, cur, isDemo, demoApi, onDemoLimit }) {
+export default function Sales({ products, setProducts, sales, setSales, lending, setLending, userId, T, L, cur }) {
   const [show,    setShow]    = useState(false)
   const [editSale,setEditSale]= useState(null)   // sale being edited
   const [saving,  setSaving]  = useState(false)
@@ -208,21 +207,11 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           const it = form.items.find(i => i.productId === p.id)
           return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p
         }))
-        let created
-        if (isDemo) {
-          created = demoApi.sales.create(sale)
-          if (!created) { onDemoLimit?.(); setSaving(false); return }
-        } else if (!navigator.onLine) {
-          // ── OFFLINE: save to IndexedDB queue ────────────────────────────
-          created = await saveOffline('sales', { ...sale, userId })
-          alert('📡 You are offline. Sale saved locally and will sync when you reconnect.')
-        } else {
-          created = await apiSales.create(sale, userId)
-        }
+        const created = await apiSales.create(sale, userId)
         setSales(ss => [{ ...sale, id: created.id }, ...ss])
         if (rowBal > 0 && form.sendToLend) {
           const lEntry = { personName: form.customerName, contact: form.contact, amount: rowBal, date: dt, dueDate: form.dueDate || '', notes: form.notes, status: 'Pending', source: 'sale', saleId: created.id }
-          const cl = isDemo ? demoApi.lending.create(lEntry) : await apiLending.create(lEntry, userId)
+          const cl     = await apiLending.create(lEntry, userId)
           setLending(ls => [{ ...lEntry, id: cl.id }, ...ls])
         }
       }
@@ -232,42 +221,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     setSaving(false)
   }
 
-  // ── Delete sale (within 2-hour window) ───────────────────────────────────
-  const deleteSale = async (s) => {
-    if (!isEditable(s)) return
-    if (!confirm('Delete this sale to ' + s.customerName + '? Stock will be restored. This cannot be undone.')) return
-    try {
-      if (isDemo) {
-        setDemoSales?.(ss => ss.filter(x => x.id !== s.id))
-        setSales(ss => ss.filter(x => x.id !== s.id))
-      } else {
-        // Delete sale items then sale
-        await sb.from('sale_items').delete().eq('sale_id', s.id)
-        await sb.from('sales').delete().eq('id', s.id)
-        // Restore stock for each item
-        for (const item of s.items) {
-          const prod = products.find(p => p.id === item.productId)
-          if (prod) {
-            await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
-          }
-        }
-        setProducts(ps => ps.map(p => {
-          const it = s.items.find(i => i.productId === p.id)
-          return it ? { ...p, stock: p.stock + it.qty } : p
-        }))
-        setSales(ss => ss.filter(x => x.id !== s.id))
-        // Remove linked lending entry
-        setLending(ls => ls.filter(l => l.saleId !== s.id))
-      }
-    } catch (e) { alert('Delete failed: ' + e.message) }
-  }
-
   // ── Mark paid ──────────────────────────────────────────────────────────────
   const markPaid = async id => {
     try {
-      isDemo ? demoApi.sales.markPaid(id) : await apiSales.markPaid(id)
+      await apiSales.markPaid(id)
       setSales(ss => ss.map(s => s.id === id ? { ...s, amountPaid: s.totalAmount, balance: 0, status: 'Paid' } : s))
-      isDemo ? demoApi.lending.settleBySale(id) : await apiLending.settleBySale(id).catch(() => {})
+      await apiLending.settleBySale(id).catch(() => {})
       setLending(ls => ls.map(l => l.saleId === id ? { ...l, status: 'Settled' } : l))
     } catch (e) { alert('Error: ' + e.message) }
   }
@@ -399,24 +358,19 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               : s.status === 'Partial'
                 ? <Badge color={AMB}>{L.partial}</Badge>
                 : <Badge color={RED}>{L.unpaid}</Badge>,
-            // Actions column — edit + delete timer + mark paid
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
-              {isEditable(s) ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                    <Btn small outline color={AMB} icon="edit" onClick={() => openEdit(s)}>Edit</Btn>
-                    <Btn small outline color={RED} icon="trash" onClick={() => deleteSale(s)}>Del</Btn>
-                  </div>
+            // Actions column — edit timer + mark paid
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, alignItems: 'flex-start' }}>
+              {isEditable(s) && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <Btn small outline color={AMB} onClick={() => openEdit(s)}>✏️ Edit</Btn>
                   <EditTimer saleDate={s.date} T={T} />
-                </div>
-              ) : (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, color: T.textMuted, fontSize: 11 }}>
-                  <Icon name="lock" size={11} color={T.textMuted} />
-                  <span>Locked</span>
                 </div>
               )}
               {s.status !== 'Paid' && (
-                <Btn small color="#22C55E" icon="check" onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
+                <Btn small color={GRN} onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
+              )}
+              {s.status === 'Paid' && !isEditable(s) && (
+                <span style={{ color: T.textMuted, fontSize: 12 }}>🔒 Locked</span>
               )}
             </div>,
           ])}
@@ -425,162 +379,94 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       {/* ── New / Edit sale modal ── */}
       {show && (
-        <Modal title={editSale ? '✏️ Edit Sale' : L.recordNewSale} onClose={() => { setShow(false); setEditSale(null) }} wide T={T}>
+        <Modal title={editSale ? '✏️ Edit Sale Record' : L.recordNewSale} onClose={() => { setShow(false); setEditSale(null) }} wide T={T}>
 
+          {/* Edit warning banner */}
           {editSale && (
-            <div style={{ background: AMB + '22', border: `1px solid ${AMB}44`, borderRadius: 8, padding: '8px 12px', marginBottom: 10, fontSize: 12, color: AMB }}>
-              ⚠️ Editing sale — stock will be recalculated.
+            <div style={{ background: AMB + '22', border: `1px solid ${AMB}44`, borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, color: AMB }}>
+              ⚠️ Editing an existing sale. Stock will be recalculated automatically.
             </div>
           )}
 
-          {/* ── Row 1: Date + Time side by side ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 8 }}>
-            <Lbl label={L.date} T={T}>
-              <input type="date" value={form.date} onChange={e => sf('date', e.target.value)}
-                style={{ fontSize: 13, padding: '8px 10px' }} />
-            </Lbl>
-            <Lbl label={L.time} T={T}>
-              <input type="time" value={form.time} onChange={e => sf('time', e.target.value)}
-                style={{ fontSize: 13, padding: '8px 10px' }} />
-            </Lbl>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }} className="g2">
+            <Lbl label={L.date} T={T}><input type="date" value={form.date} onChange={e => sf('date', e.target.value)} /></Lbl>
+            <Lbl label={L.time} T={T}><input type="time" value={form.time} onChange={e => sf('time', e.target.value)} /></Lbl>
+            <Lbl label={L.customerName + ' *'} T={T}><input value={form.customerName} onChange={e => sf('customerName', e.target.value)} /></Lbl>
+            <Lbl label={L.contact} T={T}><input value={form.contact} onChange={e => sf('contact', e.target.value)} /></Lbl>
           </div>
 
-          {/* ── Row 2: Customer + Contact side by side ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-            <Lbl label={L.customerName + ' *'} T={T}>
-              <input value={form.customerName} onChange={e => sf('customerName', e.target.value)}
-                placeholder="Customer name" style={{ fontSize: 13, padding: '8px 10px' }} />
-            </Lbl>
-            <Lbl label={L.contact} T={T}>
-              <input value={form.contact} onChange={e => sf('contact', e.target.value)}
-                placeholder="Phone / etc" style={{ fontSize: 13, padding: '8px 10px' }} />
-            </Lbl>
-          </div>
-
-          {/* ── Items section ── */}
-          <div style={{ fontSize: 11, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 6 }}>
-            Items
-          </div>
-
+          <div className="dm" style={{ fontWeight: 600, fontSize: 13, marginBottom: 10, color: T.textPrimary }}>{L.items}</div>
           {form.items.map((item, idx) => (
-            <div key={idx} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 10px 8px', marginBottom: 8 }}>
-              {/* Product select — full width */}
-              <div style={{ marginBottom: 6 }}>
-                <label style={{ fontSize: 10, color: T.textMuted, display: 'block', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase' }}>
-                  {L.product} *
-                </label>
-                <select value={item.productId} onChange={e => updItem(idx, 'productId', e.target.value)}
-                  style={{ fontSize: 13, padding: '8px 10px' }}>
+            <div key={idx} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'end' }}>
+              <div>
+                <label style={{ fontSize: 11, color: T.textSecondary, display: 'block', marginBottom: 3 }}>{L.product} *</label>
+                <select value={item.productId} onChange={e => updItem(idx, 'productId', e.target.value)}>
                   <option value="">{L.selectProduct}</option>
-                  {products.map(p => (
-                    <option key={p.id} value={p.id}>{p.name}  (Stock: {p.stock})</option>
-                  ))}
+                  {products.map(p => <option key={p.id} value={p.id}>{p.name} ({L.stock}:{p.stock})</option>)}
                 </select>
               </div>
-              {/* Price + Qty + Remove on one row */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 36px', gap: 6, alignItems: 'flex-end' }}>
-                <div>
-                  <label style={{ fontSize: 10, color: T.textMuted, display: 'block', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase' }}>
-                    Unit Price
-                  </label>
-                  <input type="number" value={item.unitPrice}
-                    onChange={e => updItem(idx, 'unitPrice', +e.target.value)}
-                    style={{ fontSize: 13, padding: '7px 10px' }} />
-                </div>
-                <div>
-                  <label style={{ fontSize: 10, color: T.textMuted, display: 'block', marginBottom: 3, fontWeight: 600, textTransform: 'uppercase' }}>
-                    Qty
-                  </label>
-                  <input type="number" min="1" value={item.qty}
-                    onChange={e => updItem(idx, 'qty', +e.target.value)}
-                    style={{ fontSize: 13, padding: '7px 8px', textAlign: 'center' }} />
-                </div>
-                <button
-                  onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
-                  style={{ height: 36, width: 36, background: RED + '18', border: `1px solid ${RED}44`, borderRadius: 8, color: RED, fontSize: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  ×
-                </button>
+              <div>
+                <label style={{ fontSize: 11, color: T.textSecondary, display: 'block', marginBottom: 3 }}>{L.unitPrice}</label>
+                <input type="number" value={item.unitPrice} onChange={e => updItem(idx, 'unitPrice', +e.target.value)} />
               </div>
-              {/* Subtotal */}
-              {item.productId && (
-                <div style={{ marginTop: 5, fontSize: 11, color: T.textMuted, textAlign: 'right' }}>
-                  Subtotal: <span className="mono" style={{ color: T.accent, fontWeight: 700 }}>{cur(item.qty * item.unitPrice)}</span>
-                </div>
-              )}
+              <div>
+                <label style={{ fontSize: 11, color: T.textSecondary, display: 'block', marginBottom: 3 }}>{L.qty}</label>
+                <input type="number" min="1" value={item.qty} onChange={e => updItem(idx, 'qty', +e.target.value)} />
+              </div>
+              <button onClick={() => setForm(f => ({ ...f, items: f.items.filter((_, i) => i !== idx) }))}
+                style={{ height: 40, background: 'none', border: 'none', color: RED, fontSize: 20, cursor: 'pointer' }}>×</button>
             </div>
           ))}
+          <Btn small outline color={T.accent} style={{ marginBottom: 14 }}
+            onClick={() => setForm(f => ({ ...f, items: [...f.items, { productId: '', productName: '', qty: 1, unitPrice: 0 }] }))}>
+            {L.addItem}
+          </Btn>
 
-          <button onClick={() => setForm(f => ({ ...f, items: [...f.items, { productId: '', productName: '', qty: 1, unitPrice: 0 }] }))}
-            style={{ width: '100%', padding: '8px', borderRadius: 8, border: `1.5px dashed ${T.accent}66`, background: T.accent + '0a', color: T.accent, fontWeight: 600, fontSize: 12, cursor: 'pointer', marginBottom: 10 }}>
-            + Add Another Item
-          </button>
-
-          {/* ── Total bar ── */}
-          <div style={{ background: T.accent + '18', border: `1px solid ${T.accent}44`, borderRadius: 10, padding: '10px 14px', marginBottom: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: T.textSecondary, fontSize: 13, fontWeight: 600 }}>Total</span>
-            <span className="mono" style={{ fontWeight: 800, fontSize: 20, color: T.accent }}>{cur(rowTotal)}</span>
+          <div style={{ background: T.bg, borderRadius: 10, padding: 12, marginBottom: 14, display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: T.textSecondary }}>{L.totalAmount}</span>
+            <span className="mono" style={{ fontWeight: 700, fontSize: 18, color: T.textPrimary }}>{cur(rowTotal)}</span>
           </div>
 
-          {/* ── Payment method + Amount paid ── */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
-            <div>
-              <div style={{ fontSize: 10, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 5 }}>
-                Payment
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }} className="g2">
+            <Lbl label={L.paymentMethod} T={T}>
+              <div style={{ display: 'flex', gap: 8 }}>
                 {['cash', 'transfer'].map(m => (
                   <button key={m} onClick={() => sf('paymentMethod', m)}
-                    style={{ flex: 1, padding: '8px 4px', borderRadius: 8, border: `2px solid ${form.paymentMethod === m ? (m === 'cash' ? GRN : BLU) : T.border}`, background: form.paymentMethod === m ? (m === 'cash' ? GRN + '18' : BLU + '18') : 'transparent', color: form.paymentMethod === m ? (m === 'cash' ? GRN : BLU) : T.textSecondary, fontWeight: 700, fontSize: 11, cursor: 'pointer' }}>
-                    {m === 'cash' ? '💵 Cash' : '📲 Transfer'}
+                    style={{ flex: 1, padding: '9px 4px', borderRadius: 8, border: `2px solid ${form.paymentMethod === m ? (m === 'cash' ? GRN : BLU) : T.border}`, background: form.paymentMethod === m ? (m === 'cash' ? GRN + '22' : BLU + '22') : 'transparent', color: form.paymentMethod === m ? (m === 'cash' ? GRN : BLU) : T.textSecondary, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}>
+                    {m === 'cash' ? L.cash : L.transfer}
                   </button>
                 ))}
               </div>
-            </div>
-            <Lbl label="Amount Paid" T={T}>
-              <input type="number" value={form.amountPaid}
-                onChange={e => sf('amountPaid', e.target.value)}
-                placeholder={rowTotal > 0 ? `Max ${cur(rowTotal)}` : '0.00'}
-                style={{ fontSize: 13, padding: '8px 10px' }} />
+            </Lbl>
+            <Lbl label={L.amountPaid} T={T}>
+              <input type="number" value={form.amountPaid} onChange={e => sf('amountPaid', e.target.value)} placeholder={`0 – ${rowTotal}`} />
             </Lbl>
           </div>
 
-          {/* ── Balance due ── */}
+          {/* Balance / auto-lend (new sales only) */}
           {!editSale && rowBal > 0 && (
-            <div style={{ background: RED + '0e', border: `1px solid ${RED}44`, borderRadius: 10, padding: '10px 12px', marginBottom: 10 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 6 }}>
-                <span style={{ color: RED, fontWeight: 700, fontSize: 13 }}>
-                  Balance: <span className="mono">{cur(rowBal)}</span>
-                </span>
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
+            <div style={{ background: RED + '11', border: `1px solid ${RED}44`, borderRadius: 10, padding: 12, marginBottom: 12 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ color: RED, fontWeight: 600 }}>{L.balanceDue}: <span className="mono">{cur(rowBal)}</span></span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, cursor: 'pointer' }}>
                   <input type="checkbox" checked={form.sendToLend} onChange={e => sf('sendToLend', e.target.checked)} />
-                  <span style={{ color: AMB, fontWeight: 600 }}>Track as debt</span>
+                  <span style={{ color: AMB }}>{L.autoAddLending}</span>
                 </label>
               </div>
               {form.sendToLend && (
-                <Lbl label="Due Date" T={T}>
-                  <input type="date" value={form.dueDate}
-                    onChange={e => sf('dueDate', e.target.value)}
-                    style={{ fontSize: 13, padding: '7px 10px' }} />
+                <Lbl label={L.dueDate} T={T}>
+                  <input type="date" value={form.dueDate} onChange={e => sf('dueDate', e.target.value)} />
                 </Lbl>
               )}
             </div>
           )}
 
-          {/* ── Notes (compact) ── */}
-          <Lbl label="Notes (optional)" T={T}>
-            <textarea value={form.notes} onChange={e => sf('notes', e.target.value)}
-              rows={2} placeholder="Any notes about this sale..."
-              style={{ fontSize: 13, padding: '8px 10px', resize: 'none' }} />
+          <Lbl label={L.notes} T={T}>
+            <textarea value={form.notes} onChange={e => sf('notes', e.target.value)} rows={2} style={{ resize: 'vertical' }} />
           </Lbl>
-
-          {/* ── Save button ── */}
-          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null) }} style={{ flex: 1, justifyContent: 'center' }}>
-              Cancel
-            </Btn>
-            <Btn onClick={saveSale} disabled={saving} style={{ flex: 2, justifyContent: 'center' }}>
-              {saving ? 'Saving…' : editSale ? '💾 Save Changes' : '✅ Record Sale'}
-            </Btn>
+          <div style={{ display: 'flex', gap: 10, marginTop: 18, justifyContent: 'flex-end' }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null) }}>{L.cancel}</Btn>
+            <Btn onClick={saveSale} disabled={saving}>{saving ? 'Saving…' : editSale ? 'Save Changes' : L.save}</Btn>
           </div>
         </Modal>
       )}
