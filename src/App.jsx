@@ -306,7 +306,7 @@ export default function App() {
             {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
-            {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} user={user} onSignOut={handleSignOut} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
           </div>
         </div>
 
