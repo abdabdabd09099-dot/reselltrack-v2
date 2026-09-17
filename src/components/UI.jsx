@@ -106,9 +106,11 @@ export const Modal = ({ title, onClose, children, wide, T }) => (
       position: 'fixed', inset: 0, zIndex: 200,
       background: '#000000cc',
       backdropFilter: 'blur(3px)',
+      /* Overlay IS the full screen — no gap */
       display: 'flex',
-      alignItems: 'flex-end',
-      justifyContent: 'center',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'flex-end',
     }}
   >
     <div
@@ -117,12 +119,11 @@ export const Modal = ({ title, onClose, children, wide, T }) => (
         background: T.surface,
         width: '100%',
         maxWidth: wide ? 720 : 560,
-        /* 100% of the visible viewport height — no dark gap */
-        height: '100%',
-        maxHeight: '100dvh',
+        /* Lock to full viewport — the overlay fills screen so 100% works */
+        height: '100dvh',
         display: 'flex',
         flexDirection: 'column',
-        animation: 'slideUpSheet .25s cubic-bezier(.32,1,.25,1) both',
+        animation: 'slideUpSheet .22s cubic-bezier(.32,1,.25,1) both',
       }}
     >
       {/* ── Fixed header ── */}

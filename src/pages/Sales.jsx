@@ -285,7 +285,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       </div>
 
       {/* ── Filter panel ── */}
-      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, marginBottom: 14 }}>
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 16, marginBottom: 10 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: showFilters ? 14 : 0, flexWrap: 'wrap' }}>
           <input placeholder="Search customer or sale ID..." value={srch} onChange={e => setSrch(e.target.value)} style={{ flex: 1, minWidth: 160 }} />
           <button onClick={() => setShowFilters(f => !f)}
