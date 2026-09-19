@@ -1,6 +1,6 @@
 // ─── Expenses.jsx ─────────────────────────────────────────────────────────────
-// Fix 2: When "Restocking" category is chosen, auto-fetch products,
-//         select quantity + price, then auto-update that product's stock.
+// Clean modal layout — restocking panel shows:
+//   In Stock · Single Price · Total Expenses inputs + auto-calc total
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import { apiExpenses, apiProducts } from '../utils/supabase.js'
@@ -11,46 +11,67 @@ import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 
 const Lbl = Field
 
+// ── Divider with label ────────────────────────────────────────────────────────
+const Divider = ({ label, T }) => (
+  <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 2px' }}>
+    <div style={{ flex:1, height:1, background:T.border }} />
+    <span style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>{label}</span>
+    <div style={{ flex:1, height:1, background:T.border }} />
+  </div>
+)
+
+// ── Mini info tile ────────────────────────────────────────────────────────────
+const InfoTile = ({ label, value, color, T }) => (
+  <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'8px 12px', flex:1, minWidth:80 }}>
+    <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>{label}</div>
+    <div className="mono" style={{ fontSize:15, fontWeight:800, color:color||T.textPrimary }}>{value}</div>
+  </div>
+)
+
 export default function Expenses({ expenses, setExpenses, products, setProducts, userId, T, L, cur, isDemo, demoApi }) {
   const [show,   setShow]   = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const blank = { desc:'', category:'', amount:'', date:todayStr(), notes:'', restockProductId:'', restockQty:1, restockPrice:0 }
+  const blank = { desc:'', category:'', amount:'', date:todayStr(), notes:'', restockProductId:'', restockQty:1, restockUnitPrice:0 }
   const [form, setForm] = useState(blank)
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
-  const isRestocking = form.category === 'Restocking'
+  const isRestocking        = form.category === 'Restocking'
+  const selectedProduct     = products.find(p => p.id === form.restockProductId)
+  const restockTotal        = +form.restockQty * +form.restockUnitPrice
+  const newStockAfterRestock = selectedProduct ? selectedProduct.stock + +form.restockQty : 0
 
-  // When restocking product is selected — auto-fill desc and price
-  const selectRestockProduct = (productId) => {
+  // ── Select restocking product — auto-fill fields ──────────────────────────
+  const selectRestockProduct = productId => {
     const p = products.find(p => p.id === productId)
-    sf('restockProductId', productId)
-    if (p) {
-      sf('desc',        `Restocking: ${p.name}`)
-      sf('restockPrice', p.buyPrice || 0)
-      // Auto-calc amount
-      setForm(f => ({
-        ...f,
-        restockProductId: productId,
-        desc:        `Restocking: ${p.name}`,
-        restockPrice: p.buyPrice || 0,
-        amount:       String((f.restockQty || 1) * (p.buyPrice || 0)),
-      }))
-    }
+    setForm(f => ({
+      ...f,
+      restockProductId: productId,
+      desc:             p ? `Restocking: ${p.name}` : f.desc,
+      restockUnitPrice: p ? (p.buyPrice || 0) : 0,
+      amount:           p ? String(f.restockQty * (p.buyPrice || 0)) : f.amount,
+    }))
   }
 
-  // Recalc total when qty or price changes
-  const updateRestockCalc = (field, val) => {
+  // ── Restock qty/price change → recalc total ───────────────────────────────
+  const updateRestock = (field, val) => {
     setForm(f => {
-      const qty   = field==='restockQty'   ? +val : +f.restockQty
-      const price = field==='restockPrice' ? +val : +f.restockPrice
-      return { ...f, [field]: field==='restockQty' ? +val : +val, amount: String(qty * price) }
+      const qty   = field === 'restockQty'       ? +val : +f.restockQty
+      const price = field === 'restockUnitPrice' ? +val : +f.restockUnitPrice
+      return { ...f, [field]: +val, amount: String(qty * price) }
     })
   }
 
-  // ── Save expense ──────────────────────────────────────────────────────────
+  // ── Allow manual total edit ───────────────────────────────────────────────
+  const handleTotalEdit = val => {
+    setForm(f => ({ ...f, amount: val }))
+  }
+
+  // ── Save ──────────────────────────────────────────────────────────────────
   const saveExp = async () => {
-    if (!form.desc || !form.amount) return alert('Description and amount are required.')
+    if (!form.desc)   return alert('Description is required.')
+    if (!form.amount) return alert('Amount is required.')
+    if (isRestocking && !form.restockProductId) return alert('Select a product to restock.')
     setSaving(true)
     try {
       const payload = { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes }
@@ -63,8 +84,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       } else {
         created = await apiExpenses.create(payload, userId)
       }
-
-      // ── Fix 2: Update product stock on restock ──────────────────────────
+      // Update product stock on restock
       if (isRestocking && form.restockProductId && form.restockQty > 0 && !isDemo) {
         const prod = products.find(p => p.id === form.restockProductId)
         if (prod) {
@@ -73,7 +93,6 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
           setProducts(ps => ps.map(p => p.id === form.restockProductId ? { ...p, stock: newStock } : p))
         }
       }
-
       setExpenses(es => [created, ...es])
       setShow(false); setForm(blank)
     } catch(e) { alert('Save failed: ' + e.message) }
@@ -90,7 +109,6 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
 
   const todayTot = expenses.filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)
   const monthTot = expenses.filter(e => inRange(e.date, thisMonthRange())).reduce((a,e) => a + e.amount, 0)
-  const selectedRestockProduct = products.find(p => p.id === form.restockProductId)
 
   return (
     <div className="fade-in">
@@ -98,7 +116,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       {/* ── Header ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <h1 className="dm" style={{ fontSize:24, fontWeight:700, color:T.textPrimary }}>{L.expenses}</h1>
-        <Btn onClick={() => setShow(true)}>{L.addExpense}</Btn>
+        <Btn onClick={() => setShow(true)} icon="plus">{L.addExpense}</Btn>
       </div>
 
       {/* ── Stats ── */}
@@ -123,108 +141,137 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
         />
       </div>
 
-      {/* ── Add expense modal ── */}
+      {/* ── Add Expense Modal ── */}
       {show && (
         <Modal title={L.addExpenseTitle || 'Add Expense'} onClose={() => { setShow(false); setForm(blank) }} T={T}>
-          <div style={{ display:'grid', gap:12 }}>
 
-            {/* Category — first so restocking panel appears early */}
-            <Lbl label={L.expCategory} T={T}>
-              <select value={form.category} onChange={e => sf('category', e.target.value)} style={{ fontSize:13 }}>
-                <option value="">{L.selectCategory || 'Select category...'}</option>
-                {EXP_CATS.map(c => <option key={c}>{c}</option>)}
-              </select>
-            </Lbl>
+          {/* ── Category (always first) ── */}
+          <Lbl label={L.expCategory} T={T}>
+            <select value={form.category} onChange={e => { sf('category', e.target.value); if (e.target.value !== 'Restocking') sf('restockProductId','') }} style={{ fontSize:13 }}>
+              <option value="">{L.selectCategory || 'Select category...'}</option>
+              {EXP_CATS.map(c => <option key={c}>{c}</option>)}
+            </select>
+          </Lbl>
 
-            {/* ── Restocking panel ── */}
-            {isRestocking && (
-              <div style={{ background: GRN+'0d', border:`1px solid ${GRN}44`, borderRadius:12, padding:14 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
-                  <Icon name="package" size={15} color={GRN} />
-                  <span style={{ fontWeight:700, fontSize:13, color:GRN }}>Restocking — updates product stock automatically</span>
+          {/* ══ RESTOCKING PANEL ══════════════════════════════════════════ */}
+          {isRestocking && (
+            <div style={{ background:GRN+'0a', border:`1.5px solid ${GRN}44`, borderRadius:14, padding:14, marginTop:10 }}>
+
+              {/* Header */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:14 }}>
+                <div style={{ width:28, height:28, borderRadius:8, background:GRN+'22', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <Icon name="package" size={14} color={GRN} strokeWidth={2.5} />
                 </div>
-
-                {/* Select product */}
-                <Lbl label={L.restockingProduct || 'Select product to restock'} T={T}>
-                  <select value={form.restockProductId} onChange={e => selectRestockProduct(e.target.value)} style={{ fontSize:13 }}>
-                    <option value="">-- Choose product --</option>
-                    {products.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} (Current stock: {p.stock})</option>
-                    ))}
-                  </select>
-                </Lbl>
-
-                {/* Show current stock info */}
-                {selectedRestockProduct && (
-                  <div style={{ display:'flex', gap:8, marginTop:10, marginBottom:10, flexWrap:'wrap' }}>
-                    {[
-                      { label:'Current Stock', value:selectedRestockProduct.stock, color:T.textPrimary },
-                      { label:'Buy Price',     value:cur(selectedRestockProduct.buyPrice),  color:AMB },
-                      { label:'Sell Price',    value:cur(selectedRestockProduct.sellPrice), color:GRN },
-                    ].map((s,i) => (
-                      <div key={i} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:8, padding:'7px 12px', flex:1 }}>
-                        <div style={{ fontSize:10, color:T.textMuted, fontWeight:600, textTransform:'uppercase' }}>{s.label}</div>
-                        <div className="mono" style={{ fontSize:14, fontWeight:700, color:s.color }}>{s.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Qty + Price */}
-                {form.restockProductId && (
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:10 }}>
-                    <Lbl label={L.restockingQty || 'Restock quantity'} T={T}>
-                      <input type="number" min="1" value={form.restockQty}
-                        onChange={e => updateRestockCalc('restockQty', e.target.value)}
-                        style={{ fontSize:13 }} />
-                    </Lbl>
-                    <Lbl label={L.restockingPrice || 'Price per unit'} T={T}>
-                      <input type="number" value={form.restockPrice}
-                        onChange={e => updateRestockCalc('restockPrice', e.target.value)}
-                        style={{ fontSize:13 }} />
-                    </Lbl>
-                  </div>
-                )}
-
-                {/* Stock preview */}
-                {selectedRestockProduct && form.restockQty > 0 && (
-                  <div style={{ marginTop:10, background:GRN+'18', border:`1px solid ${GRN}44`, borderRadius:8, padding:'8px 12px', fontSize:12, color:GRN, fontWeight:600 }}>
-                    ✅ After restock: {selectedRestockProduct.name} will have <strong>{selectedRestockProduct.stock + +form.restockQty}</strong> units
-                  </div>
-                )}
+                <div>
+                  <div style={{ fontSize:13, fontWeight:700, color:GRN }}>Restocking</div>
+                  <div style={{ fontSize:10, color:T.textMuted }}>Auto-updates product stock on save</div>
+                </div>
               </div>
-            )}
+
+              {/* Product select */}
+              <Lbl label={L.restockingProduct || 'Product'} T={T}>
+                <select value={form.restockProductId} onChange={e => selectRestockProduct(e.target.value)} style={{ fontSize:13 }}>
+                  <option value="">-- Choose product --</option>
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              </Lbl>
+
+              {/* Product info tiles — In Stock, Buy Price, Sell Price */}
+              {selectedProduct && (
+                <>
+                  <div style={{ display:'flex', gap:8, marginTop:12, marginBottom:14 }}>
+                    <InfoTile label="In Stock"   value={selectedProduct.stock}               color={selectedProduct.stock > 5 ? GRN : selectedProduct.stock > 0 ? AMB : RED} T={T} />
+                    <InfoTile label="Buy Price"  value={cur(selectedProduct.buyPrice)}        color={AMB} T={T} />
+                    <InfoTile label="Sell Price" value={cur(selectedProduct.sellPrice)}       color={GRN} T={T} />
+                  </div>
+
+                  <Divider label="Restock details" T={T} />
+
+                  {/* Qty + Unit Price side by side */}
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:10, marginBottom:10 }}>
+                    <Lbl label={L.restockingQty || 'Qty to Add'} T={T}>
+                      <input type="number" min="1" value={form.restockQty}
+                        onChange={e => updateRestock('restockQty', e.target.value)}
+                        style={{ fontSize:15, fontWeight:700 }} />
+                    </Lbl>
+                    <Lbl label={L.restockingPrice || 'Unit Price'} T={T}>
+                      <input type="number" min="0" value={form.restockUnitPrice}
+                        onChange={e => updateRestock('restockUnitPrice', e.target.value)}
+                        style={{ fontSize:15 }} />
+                    </Lbl>
+                  </div>
+
+                  <Divider label="Total expense" T={T} />
+
+                  {/* Total Expenses — editable, auto-calc from qty × price */}
+                  <div style={{ marginTop:10 }}>
+                    <Lbl label="Total Expenses (auto-calculated)" T={T}>
+                      <div style={{ position:'relative' }}>
+                        <input type="number" value={form.amount}
+                          onChange={e => handleTotalEdit(e.target.value)}
+                          style={{ fontSize:20, fontWeight:800, color:T.accent, paddingRight:80 }} />
+                        <span style={{ position:'absolute', right:12, top:'50%', transform:'translateY(-50%)', fontSize:11, color:T.textMuted, fontWeight:600 }}>
+                          {form.restockQty} × {cur(form.restockUnitPrice)}
+                        </span>
+                      </div>
+                    </Lbl>
+                  </div>
+
+                  {/* After-restock preview */}
+                  <div style={{ marginTop:12, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                    <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'8px 12px' }}>
+                      <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>Current Stock</div>
+                      <div className="mono" style={{ fontSize:16, fontWeight:800, color:T.textPrimary }}>{selectedProduct.stock}</div>
+                    </div>
+                    <div style={{ background:GRN+'18', border:`1px solid ${GRN}44`, borderRadius:9, padding:'8px 12px' }}>
+                      <div style={{ fontSize:9, color:GRN, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>After Restock</div>
+                      <div className="mono" style={{ fontSize:16, fontWeight:800, color:GRN }}>+{form.restockQty} → {newStockAfterRestock}</div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ── Non-restocking fields ── */}
+          <div style={{ marginTop:12, display:'grid', gap:10 }}>
 
             {/* Description */}
-            <Lbl label={L.expDescription+' *'} T={T}>
-              <input value={form.desc} onChange={e => sf('desc', e.target.value)} placeholder="e.g. Bought 10 shoes from supplier" />
+            <Lbl label={L.expDescription + ' *'} T={T}>
+              <input value={form.desc} onChange={e => sf('desc', e.target.value)}
+                placeholder={isRestocking ? 'Auto-filled from product name' : 'e.g. Packaging materials'}
+                style={{ fontSize:13 }} />
             </Lbl>
 
-            {/* Amount + Date */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:12 }} className="g2">
-              <Lbl label={L.expenseAmount+' *'} T={T}>
-                <input type="number" value={form.amount} onChange={e => sf('amount',e.target.value)} placeholder="Total cost" style={{ fontSize:isRestocking?15:14, fontWeight:isRestocking?700:400, color:isRestocking?T.accent:T.textPrimary }} />
-              </Lbl>
-              <Lbl label={L.date} T={T}>
-                <input type="date" value={form.date} onChange={e => sf('date',e.target.value)} />
+            {/* Amount (only shown standalone if NOT restocking) + Date */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }} className="g2">
+              {!isRestocking && (
+                <Lbl label={L.expenseAmount + ' *'} T={T}>
+                  <input type="number" value={form.amount} onChange={e => sf('amount', e.target.value)}
+                    placeholder="0.00" style={{ fontSize:14 }} />
+                </Lbl>
+              )}
+              <Lbl label={L.date} T={T} col={isRestocking ? '1 / -1' : undefined}>
+                <input type="date" value={form.date} onChange={e => sf('date', e.target.value)} style={{ fontSize:13 }} />
               </Lbl>
             </div>
 
-            {isRestocking && form.restockQty > 0 && form.restockPrice > 0 && (
-              <div style={{ fontSize:12, color:T.textMuted, marginTop:-4 }}>
-                Auto-calculated: {form.restockQty} × {cur(form.restockPrice)} = <strong style={{ color:T.accent }}>{cur(+form.restockQty * +form.restockPrice)}</strong>
-              </div>
-            )}
-
-            <Lbl label={L.notes} T={T}>
-              <textarea value={form.notes} onChange={e => sf('notes',e.target.value)} rows={2} style={{ resize:'vertical' }} />
+            {/* Notes */}
+            <Lbl label={L.notes + ' (optional)'} T={T}>
+              <textarea value={form.notes} onChange={e => sf('notes', e.target.value)}
+                rows={2} style={{ resize:'none', fontSize:13 }} />
             </Lbl>
           </div>
 
-          <div style={{ display:'flex', gap:8, marginTop:16, justifyContent:'flex-end' }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }}>{L.cancel}</Btn>
-            <Btn onClick={saveExp} disabled={saving} icon="download">
-              {saving ? 'Saving…' : isRestocking && form.restockProductId ? `✅ Save & Restock` : L.save}
+          {/* ── Action buttons ── */}
+          <div style={{ display:'flex', gap:8, marginTop:14 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }} style={{ flex:1, justifyContent:'center' }}>
+              {L.cancel}
+            </Btn>
+            <Btn onClick={saveExp} disabled={saving} icon={isRestocking ? 'package' : 'download'} style={{ flex:2, justifyContent:'center' }}>
+              {saving ? 'Saving…' : isRestocking && form.restockProductId ? '✅ Save & Update Stock' : L.save}
             </Btn>
           </div>
         </Modal>
