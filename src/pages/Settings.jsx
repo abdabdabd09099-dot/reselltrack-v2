@@ -229,7 +229,35 @@ export default function Settings({
         </div>
 
         {/* Sign out */}
-        <Btn outline color={T.textSecondary} icon="logout" onClick={onSignOut} small>Sign Out</Btn>
+        <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${T.border}` }}>
+          <Btn outline color={T.textSecondary} icon="logout" onClick={onSignOut} small>Sign Out</Btn>
+        </div>
+
+        {/* ── Danger Zone inside Account ── */}
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${RED}33` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <Icon name="trash" size={13} color={RED} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: RED }}>Danger Zone</span>
+          </div>
+          <p style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5, marginBottom: 10 }}>
+            Permanently delete your account and all data. <strong style={{ color: RED }}>Cannot be undone.</strong>
+          </p>
+          {!showDelete ? (
+            <Btn outline color={RED} icon="trash" onClick={() => setShowDelete(true)} small>Delete My Account</Btn>
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <div style={{ fontSize: 12, color: RED, fontWeight: 600 }}>Type <strong>DELETE</strong> to confirm:</div>
+              <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE"
+                style={{ background: T.bg, color: RED, border: `1.5px solid ${RED}66`, borderRadius: 8, padding: '8px 12px', fontSize: 13, outline: 'none', fontFamily: 'inherit' }} />
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Btn danger icon="trash" disabled={deleteConfirm !== 'DELETE' || deleting} onClick={deleteAccount} small>
+                  {deleting ? 'Deleting…' : 'Delete Forever'}
+                </Btn>
+                <Btn outline color={T.textSecondary} onClick={() => { setShowDelete(false); setDeleteConfirm('') }} small>Cancel</Btn>
+              </div>
+            </div>
+          )}
+        </div>
       </Accordion>
 
       {/* ══ SECURITY ═════════════════════════════════════════════════════════ */}
@@ -381,32 +409,6 @@ export default function Settings({
         </div>
         {exportMsg && <div style={msgStyle(exportMsg)}>{exportMsg}</div>}
       </Accordion>
-
-      {/* ══ DANGER ZONE ══════════════════════════════════════════════════════ */}
-      <div style={{ background: RED + '08', border: `1px solid ${RED}33`, borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <Icon name="trash" size={15} color={RED} strokeWidth={2} />
-          <span className="dm" style={{ fontSize: 14, fontWeight: 700, color: RED }}>Danger Zone</span>
-        </div>
-        <p style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.6, marginBottom: 12 }}>
-          Permanently delete your account and all data. <strong style={{ color: RED }}>Cannot be undone.</strong>
-        </p>
-        {!showDelete ? (
-          <Btn outline color={RED} icon="trash" onClick={() => setShowDelete(true)} small>Delete My Account</Btn>
-        ) : (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <div style={{ fontSize: 12, color: RED, fontWeight: 600 }}>Type <strong>DELETE</strong> to confirm:</div>
-            <input value={deleteConfirm} onChange={e => setDeleteConfirm(e.target.value)} placeholder="DELETE"
-              style={{ background: T.bg, color: RED, border: `1.5px solid ${RED}66`, borderRadius: 8, padding: '8px 12px', fontSize: 14, outline: 'none', fontFamily: 'inherit' }} />
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Btn danger icon="trash" disabled={deleteConfirm !== 'DELETE' || deleting} onClick={deleteAccount} small>
-                {deleting ? 'Deleting…' : 'Delete Forever'}
-              </Btn>
-              <Btn outline color={T.textSecondary} onClick={() => { setShowDelete(false); setDeleteConfirm('') }} small>Cancel</Btn>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* ══ ABOUT ════════════════════════════════════════════════════════════ */}
       <Accordion icon={<Icon name="info" size={15} color={T.accent} />} label={L.about} T={T}>

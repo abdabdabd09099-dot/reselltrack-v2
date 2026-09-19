@@ -303,7 +303,7 @@ export default function App() {
             {page === 'dashboard' && <Dashboard products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
             {page === 'products'  && <Products  products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
             {page === 'sales'     && <Sales     products={P} setProducts={setP} sales={S} setSales={setS} lending={LD} setLending={setLD} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
-            {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
+            {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
             {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} user={user} onSignOut={handleSignOut} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
