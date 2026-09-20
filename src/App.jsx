@@ -18,7 +18,8 @@ import Sales         from './pages/Sales.jsx'
 import Expenses      from './pages/Expenses.jsx'
 import LendBorrow    from './pages/LendBorrow.jsx'
 import Reports       from './pages/Reports.jsx'
-import Settings      from './pages/Settings.jsx'
+import Settings        from './pages/Settings.jsx'
+import PriceCalculator from './pages/PriceCalculator.jsx'
 
 // ── Components ────────────────────────────────────────────────────────────────
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
@@ -306,6 +307,7 @@ export default function App() {
             {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'calculator' && <PriceCalculator T={T} cur={cur} products={P} />}
             {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} user={user} onSignOut={handleSignOut} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
           </div>
         </div>

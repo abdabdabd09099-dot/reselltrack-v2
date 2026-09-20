@@ -376,8 +376,13 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   <EditTimer saleDate={s.date} />
                 </div>
               )}
-              {/* Delete — always visible */}
-              <Btn small outline color={RED} icon="trash" onClick={() => deleteSale(s)}>Delete</Btn>
+              {/* Delete — visible always, disabled after 2hr */}
+              <Btn small outline color={RED} icon="trash"
+                onClick={() => isEditable(s) ? deleteSale(s) : null}
+                disabled={!isEditable(s)}
+                style={{ opacity: isEditable(s) ? 1 : 0.38, cursor: isEditable(s) ? 'pointer' : 'not-allowed' }}>
+                {isEditable(s) ? 'Delete' : '🔒 Locked'}
+              </Btn>
               {/* Mark paid */}
               {s.status !== 'Paid' && (
                 <Btn small color={GRN} icon="check" onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
