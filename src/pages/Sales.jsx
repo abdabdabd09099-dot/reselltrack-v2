@@ -143,8 +143,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
   // ── Delete sale ───────────────────────────────────────────────────────────
   const deleteSale = async s => {
-    if (!isEditable(s)) return
-    if (!confirm(`Delete sale to ${s.customerName}? Stock will be restored.`)) return
+    if (!confirm(`Delete sale to ${s.customerName}?\n\nThis will restore stock for all items. This cannot be undone.`)) return
     try {
       if (isDemo) {
         setSales(ss => ss.filter(x => x.id !== s.id))
@@ -302,7 +301,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       {/* ── Edit window notice ── */}
       <div style={{ background:AMB+'11', border:`1px solid ${AMB}33`, borderRadius:10, padding:'8px 14px', marginBottom:14, fontSize:12, color:AMB, display:'flex', alignItems:'center', gap:8 }}>
         <Icon name="clock" size={13} color={AMB} />
-        <span>Sales can be edited or deleted within <strong>2 hours</strong> of recording.</span>
+        <span>Sales can be <strong>edited</strong> within 2 hours. <strong>Delete</strong> is always available — restores stock automatically.</span>
       </div>
 
       {/* ── Period tabs ── */}
@@ -370,20 +369,19 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <Badge color={s.paymentMethod==='cash'?GRN:BLU}>{s.paymentMethod==='cash'?'💵':'📲'}</Badge>,
             s.status==='Paid' ? <Badge color={GRN}>✅ {L.paid}</Badge> : s.status==='Partial' ? <Badge color={AMB}>{L.partial}</Badge> : <Badge color={RED}>{L.unpaid}</Badge>,
             <div style={{ display:'flex', flexDirection:'column', gap:5, alignItems:'flex-start' }}>
-              {isEditable(s) ? (
-                <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-                  <div style={{ display:'flex', gap:5, alignItems:'center' }}>
-                    <Btn small outline color={AMB} icon="edit" onClick={() => openEdit(s)}>Edit</Btn>
-                    <Btn small outline color={RED} icon="trash" onClick={() => deleteSale(s)}>Del</Btn>
-                  </div>
+              {/* Edit — only within 2hr window */}
+              {isEditable(s) && (
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <Btn small outline color={AMB} icon="edit" onClick={() => openEdit(s)}>Edit</Btn>
                   <EditTimer saleDate={s.date} />
                 </div>
-              ) : (
-                <div style={{ display:'flex', alignItems:'center', gap:4, color:T.textMuted, fontSize:11 }}>
-                  <Icon name="lock" size={11} color={T.textMuted} /><span>Locked</span>
-                </div>
               )}
-              {s.status !== 'Paid' && <Btn small color={GRN} icon="check" onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>}
+              {/* Delete — always visible */}
+              <Btn small outline color={RED} icon="trash" onClick={() => deleteSale(s)}>Delete</Btn>
+              {/* Mark paid */}
+              {s.status !== 'Paid' && (
+                <Btn small color={GRN} icon="check" onClick={() => markPaid(s.id)}>{L.markPaid}</Btn>
+              )}
             </div>,
           ])}
         />
