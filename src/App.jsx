@@ -23,25 +23,27 @@ import PriceCalculator from './pages/PriceCalculator.jsx'
 
 // ── Components ────────────────────────────────────────────────────────────────
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
+import { Icon, Logo, SessionWarning } from './components/UI.jsx'
 import InstallPrompt    from './components/InstallPrompt.jsx'
 import DemoLimitPrompt  from './components/DemoLimitPrompt.jsx'
 
 // ── Navigation ────────────────────────────────────────────────────────────────
 const NAV_ITEMS = L => [
-  { id: 'dashboard', icon: '📊', lbl: L.dashboard  },
-  { id: 'products',  icon: '📦', lbl: L.products   },
-  { id: 'sales',     icon: '🛍️', lbl: L.sales      },
-  { id: 'expenses',  icon: '💸', lbl: L.expenses   },
-  { id: 'lend',      icon: '🤝', lbl: L.lendBorrow },
-  { id: 'reports',   icon: '📈', lbl: L.reports    },
-  { id: 'settings',  icon: '⚙️', lbl: L.settings   },
+  { id: 'dashboard',  icon: 'dashboard', lbl: L.dashboard  },
+  { id: 'products',   icon: 'products',  lbl: L.products   },
+  { id: 'sales',      icon: 'sales',     lbl: L.sales      },
+  { id: 'expenses',   icon: 'expenses',  lbl: L.expenses   },
+  { id: 'lend',       icon: 'lend',      lbl: L.lendBorrow },
+  { id: 'reports',    icon: 'reports',   lbl: L.reports    },
+  { id: 'calculator', icon: 'dollar',    lbl: 'Calculator' },
+  { id: 'settings',   icon: 'settings',  lbl: L.settings   },
 ]
 const BNAV_ITEMS = L => [
-  { id: 'dashboard', icon: '📊', lbl: L.home     },
-  { id: 'sales',     icon: '🛍️', lbl: L.sales    },
-  { id: 'expenses',  icon: '💸', lbl: L.expenses },
-  { id: 'reports',   icon: '📈', lbl: L.reports  },
-  { id: 'settings',  icon: '⚙️', lbl: L.settings },
+  { id: 'dashboard',  icon: 'dashboard', lbl: L.home     },
+  { id: 'sales',      icon: 'sales',     lbl: L.sales    },
+  { id: 'calculator', icon: 'dollar',    lbl: 'Calc'     },
+  { id: 'reports',    icon: 'reports',   lbl: L.reports  },
+  { id: 'settings',   icon: 'settings',  lbl: L.settings },
 ]
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,7 +251,7 @@ export default function App() {
                 border:     page === n.id ? `1px solid ${T.accent}44` : '1px solid transparent',
                 textAlign: 'left', cursor: 'pointer',
               }}>
-                <span style={{ fontSize: 17, flexShrink: 0 }}>{n.icon}</span>
+                <Icon name={n.icon} size={17} color={page === n.id ? T.accent : T.textSecondary} strokeWidth={page === n.id ? 2.2 : 1.8} />
                 {(!slim || isTablet) && <span style={{ whiteSpace: 'nowrap', fontSize: 13 }}>{n.lbl}</span>}
               </button>
             ))}
@@ -316,7 +318,7 @@ export default function App() {
         <nav className="bottom-nav">
           {bnavItems.map(n => (
             <button key={n.id} onClick={() => go(n.id)} className={page === n.id ? 'on' : ''}>
-              <span className="bnav-i">{n.icon}</span>
+              <Icon name={n.icon} size={20} color={page === n.id ? T.accent : T.textMuted} strokeWidth={page === n.id ? 2.2 : 1.6} />
               <span>{n.lbl}</span>
             </button>
           ))}
