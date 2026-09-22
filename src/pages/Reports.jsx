@@ -1,7 +1,8 @@
 // ─── Reports.jsx ──────────────────────────────────────────────────────────────
-// Daily / Weekly / Monthly charts — revenue vs expenses, product pie,
-// expense category pie, payment method donut, lending summary.
-// To modify: add date range picker, add export to PDF, add more chart types.
+// Added:
+//  • Cash verification panel — actual vs calculated, over/gap indicator
+//  • Sales by product table — units sold, revenue, % of total
+//  • Transaction log — improved with cash column
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
 import {
@@ -10,13 +11,16 @@ import {
 } from 'recharts'
 import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Stat, SecTitle, ChartTip, PieLabel } from '../components/UI.jsx'
+import { Stat, SecTitle, ChartTip, PieLabel, Icon } from '../components/UI.jsx'
 
 export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
   const [period, setPeriod] = useState('daily')
   const [cDate,  setCDate]  = useState(todayStr())
   const [cWeek,  setCWeek]  = useState(thisWeekRange()[0])
   const [cMonth, setCMonth] = useState(todayStr().slice(0, 7))
+
+  // ── Cash verification state ──────────────────────────────────────────────
+  const [actualCash, setActualCash] = useState('')
 
   // ── Date range ─────────────────────────────────────────────────────────────
   let range
@@ -30,17 +34,38 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     range = [`${cMonth}-01`, `${cMonth}-${String(new Date(yr, mo, 0).getDate()).padStart(2, '0')}`]
   }
 
-  // ── Filtered sets ──────────────────────────────────────────────────────────
-  const filtSales = sales.filter(s => inRange(s.date, range))
-  const filtExp   = expenses.filter(e => inRange(e.date, range))
-  const totalRev   = filtSales.reduce((a, s) => a + s.amountPaid, 0)
-  const totalExp   = filtExp.reduce((a, e) => a + e.amount, 0)
-  const netProfit  = totalRev - totalExp
-  const totalUncol = filtSales.reduce((a, s) => a + s.balance, 0)
-  const lendPend   = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const borrPend   = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
-  const cashTotal  = filtSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + s.amountPaid, 0)
-  const xferTotal  = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
+  // ── Filtered data ──────────────────────────────────────────────────────────
+  const filtSales   = sales.filter(s => inRange(s.date, range))
+  const filtExp     = expenses.filter(e => inRange(e.date, range))
+  const totalRev    = filtSales.reduce((a, s) => a + s.amountPaid, 0)
+  const totalCalc   = filtSales.reduce((a, s) => a + s.totalAmount, 0)  // calculated total
+  const totalExp    = filtExp.reduce((a, e) => a + e.amount, 0)
+  const netProfit   = totalRev - totalExp
+  const totalUncol  = filtSales.reduce((a, s) => a + s.balance, 0)
+  const lendPend    = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const borrPend    = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const cashTotal   = filtSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + s.amountPaid, 0)
+  const xferTotal   = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
+  const totalUnits  = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
+
+  // ── Cash verification calc ─────────────────────────────────────────────────
+  const actual     = parseFloat(actualCash) || 0
+  const cashDiff   = actual - totalRev
+  const hasCashEntry = actualCash !== ''
+
+  // ── Products performance table ─────────────────────────────────────────────
+  const prodStats = {}
+  filtSales.forEach(s => {
+    s.items.forEach(item => {
+      if (!prodStats[item.productName]) {
+        prodStats[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
+      }
+      prodStats[item.productName].units   += item.qty
+      prodStats[item.productName].revenue += item.qty * item.unitPrice
+      prodStats[item.productName].txCount += 1
+    })
+  })
+  const prodList = Object.values(prodStats).sort((a, b) => b.revenue - a.revenue)
 
   // ── Chart series ───────────────────────────────────────────────────────────
   const buildSeries = () => {
@@ -57,16 +82,13 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const multiDay = series.length > 1
 
   // ── Pie data ───────────────────────────────────────────────────────────────
-  const prodMap = {}
-  filtSales.flatMap(s => s.items).forEach(i => { prodMap[i.productName] = (prodMap[i.productName] || 0) + (i.qty * i.unitPrice) })
-  const prodPie  = Object.entries(prodMap).sort((a, b) => b[1] - a[1]).slice(0, 7).map(([name, value]) => ({ name, value }))
+  const prodPie  = prodList.slice(0, 7).map(p => ({ name: p.name, value: p.revenue }))
   const expCatMap = {}
   filtExp.forEach(e => { const k = e.category || 'Others'; expCatMap[k] = (expCatMap[k] || 0) + e.amount })
-  const expPie   = Object.entries(expCatMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
-  const payPie   = [{ name: 'Cash', value: cashTotal }, { name: 'Transfer', value: xferTotal }].filter(p => p.value > 0)
+  const expPie  = Object.entries(expCatMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
+  const payPie  = [{ name: 'Cash', value: cashTotal }, { name: 'Transfer', value: xferTotal }].filter(p => p.value > 0)
   const tipStyle = { background: T.surfaceHigh, border: `1px solid ${T.border}`, borderRadius: 8, color: T.textPrimary }
 
-  // ── Reusable pie card ──────────────────────────────────────────────────────
   const PieCard = ({ title, data, empty, valColor }) => (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
       <SecTitle T={T}>{title}</SecTitle>
@@ -121,11 +143,120 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
       {/* ── Stat cards ── */}
       <div className="stat-grid">
-        <Stat label={L.revenue}      value={cur(totalRev)}  color={GRN}                       icon="💰" T={T} />
-        <Stat label={L.expenses}     value={cur(totalExp)}  color={RED}                       icon="💸" T={T} />
-        <Stat label={L.profitLabel}  value={cur(netProfit)} color={netProfit >= 0 ? T.accent : RED} icon="📈" T={T} />
-        <Stat label={L.uncollected}  value={cur(totalUncol)} color={AMB}                      icon="⏳" T={T} />
-        <Stat label={L.transactions} value={filtSales.length} color={BLU}                     icon="🛍️" T={T} />
+        <Stat label={L.revenue}      value={cur(totalRev)}   color={GRN}                       icon="trending-up"   T={T} />
+        <Stat label={L.expenses}     value={cur(totalExp)}   color={RED}                       icon="trending-down" T={T} />
+        <Stat label={L.profitLabel}  value={cur(netProfit)}  color={netProfit >= 0 ? T.accent : RED} icon="dollar"   T={T} />
+        <Stat label={L.uncollected}  value={cur(totalUncol)} color={AMB}                       icon="clock"         T={T} />
+        <Stat label={L.transactions} value={filtSales.length} color={BLU}                      icon="sales"         T={T} />
+        <Stat label="Units Sold"     value={totalUnits}      color={T.accent}                  icon="package"       T={T} />
+      </div>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          CASH VERIFICATION PANEL
+          ════════════════════════════════════════════════════════════════ */}
+      <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+        <SecTitle T={T} right={
+          <span style={{ fontSize: 11, color: T.textMuted }}>
+            {filtSales.length} sale{filtSales.length !== 1 ? 's' : ''} in period
+          </span>
+        }>
+          💰 Cash Verification
+        </SecTitle>
+
+        {/* Calculated totals row */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10, marginBottom: 16 }}>
+          {[
+            { label: 'Calculated Total',  value: totalCalc,   color: T.textPrimary, hint: 'Sum of all sale amounts' },
+            { label: 'Amount Collected',  value: totalRev,    color: GRN,           hint: 'Payments received' },
+            { label: 'Still Owed',        value: totalUncol,  color: totalUncol > 0 ? RED : T.textMuted, hint: 'Unpaid balances' },
+            { label: 'Cash (💵)',         value: cashTotal,   color: GRN,           hint: 'Cash payments only' },
+            { label: 'Transfer (📲)',     value: xferTotal,   color: BLU,           hint: 'Transfer payments only' },
+          ].map((s, i) => (
+            <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px' }}>
+              <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>{s.label}</div>
+              <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{cur(s.value)}</div>
+              <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{s.hint}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Actual cash input */}
+        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <Icon name="dollar" size={14} color={T.accent} strokeWidth={2.5} />
+            <span style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>Enter Actual Cash Counted</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <input
+              type="number"
+              value={actualCash}
+              onChange={e => setActualCash(e.target.value)}
+              placeholder="Count your cash and enter the total..."
+              style={{ flex: 1, minWidth: 200, fontSize: 15, fontWeight: 600 }}
+            />
+            {hasCashEntry && (
+              <button onClick={() => setActualCash('')}
+                style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 12 }}>
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Result panel */}
+          {hasCashEntry && actual > 0 && (
+            <div style={{ marginTop: 14 }}>
+              {/* 3 comparison tiles */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Recorded</div>
+                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: T.textPrimary }}>{cur(totalRev)}</div>
+                </div>
+                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Actual Cash</div>
+                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>{cur(actual)}</div>
+                </div>
+                <div style={{
+                  background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
+                  border: `1px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
+                  borderRadius: 10, padding: '10px 12px', textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, color: T.textMuted }}>Difference</div>
+                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED }}>
+                    {cashDiff === 0 ? '±0' : cashDiff > 0 ? `+${cur(cashDiff)}` : `-${cur(Math.abs(cashDiff))}`}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status message */}
+              <div style={{
+                borderRadius: 10, padding: '12px 16px',
+                background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
+                border: `1.5px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+              }}>
+                <span style={{ fontSize: 22, flexShrink: 0 }}>
+                  {cashDiff === 0 ? '✅' : cashDiff > 0 ? '💰' : '⚠️'}
+                </span>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED, marginBottom: 4 }}>
+                    {cashDiff === 0
+                      ? 'Perfect match — cash is correct!'
+                      : cashDiff > 0
+                        ? `Over by ${cur(cashDiff)} — you have extra cash`
+                        : `Short by ${cur(Math.abs(cashDiff))} — cash is missing`}
+                  </div>
+                  <div style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5 }}>
+                    {cashDiff === 0
+                      ? 'Your actual cash matches all recorded payments exactly.'
+                      : cashDiff > 0
+                        ? 'You may have an unrecorded sale, or received extra money not entered into the system.'
+                        : 'Check for expenses paid in cash, unrecorded refunds, or missing sales entries.'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Revenue vs Expenses chart ── */}
@@ -169,13 +300,90 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
         )}
       </div>
 
+      {/* ════════════════════════════════════════════════════════════════════
+          SALES BY PRODUCT — units + revenue
+          ════════════════════════════════════════════════════════════════ */}
+      {prodList.length > 0 && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <SecTitle T={T} right={
+            <span style={{ fontSize: 11, color: T.textMuted }}>{prodList.length} product{prodList.length !== 1 ? 's' : ''}</span>
+          }>
+            📦 Sales by Product
+          </SecTitle>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: T.surfaceHigh }}>
+                  {['Product', 'Units Sold', 'Transactions', 'Revenue', '% of Total'].map((h, i) => (
+                    <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '9px 12px', fontSize: 10, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `2px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {prodList.map((p, idx) => {
+                  const pct = totalRev > 0 ? ((p.revenue / totalCalc) * 100) : 0
+                  const barW = totalCalc > 0 ? (p.revenue / totalCalc) * 100 : 0
+                  return (
+                    <tr key={p.name} style={{ borderBottom: `1px solid ${T.border}22`, background: idx % 2 === 0 ? 'transparent' : T.surfaceHigh + '44' }}>
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: 2, background: CHART_PAL[idx % CHART_PAL.length], flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontWeight: 600, color: T.textPrimary, fontSize: 13 }}>{p.name}</div>
+                            {/* Mini progress bar */}
+                            <div style={{ width: 80, height: 3, background: T.border, borderRadius: 2, marginTop: 4 }}>
+                              <div style={{ width: `${barW}%`, height: '100%', background: CHART_PAL[idx % CHART_PAL.length], borderRadius: 2 }} />
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+                        <span style={{ background: T.accent+'22', color: T.accent, border: `1px solid ${T.accent}44`, borderRadius: 6, padding: '3px 10px', fontWeight: 800, fontSize: 13, fontFamily: 'JetBrains Mono, monospace' }}>
+                          {p.units}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+                        <span className="mono" style={{ color: T.textSecondary, fontSize: 12 }}>{p.txCount}</span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+                        <span className="mono" style={{ color: GRN, fontWeight: 700, fontSize: 13 }}>{cur(p.revenue)}</span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'middle' }}>
+                        <span className="mono" style={{ color: T.textMuted, fontSize: 12 }}>{pct.toFixed(1)}%</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{ borderTop: `2px solid ${T.border}`, background: T.surfaceHigh }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 700, color: T.textPrimary, fontSize: 12 }}>TOTAL</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                    <span className="mono" style={{ color: T.accent, fontWeight: 800 }}>{totalUnits} units</span>
+                  </td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                    <span className="mono" style={{ color: T.textSecondary, fontSize: 12 }}>{filtSales.length}</span>
+                  </td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                    <span className="mono" style={{ color: GRN, fontWeight: 800 }}>{cur(totalCalc)}</span>
+                  </td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right' }}>
+                    <span className="mono" style={{ color: T.textMuted, fontSize: 12 }}>100%</span>
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* ── Product & Expense pies ── */}
-      <div className="two-col">
+      <div className="two-col" style={{ marginBottom: 16 }}>
         <PieCard title={L.salesByProduct} data={prodPie} empty={L.noSalesInPeriod} valColor={GRN} />
         <PieCard title={L.expByCategory}  data={expPie}  empty={L.noExpInPeriod}   valColor={RED} />
       </div>
 
-      {/* ── Payment method donut ── */}
+      {/* ── Payment method ── */}
       {payPie.length > 0 && (
         <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
           <SecTitle T={T}>{L.paymentMethods}</SecTitle>
@@ -218,14 +426,12 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
         </div>
       </div>
 
-      {/* ── Sales Transaction Log ── */}
+      {/* ════════════════════════════════════════════════════════════════════
+          SALES TRANSACTION LOG
+          ════════════════════════════════════════════════════════════════ */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
-
-        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, flexWrap: 'wrap', gap: 8 }}>
-          <span className="dm" style={{ fontWeight: 700, fontSize: 15, color: T.textPrimary }}>
-            🧾 Sales Transaction Log
-          </span>
+          <span className="dm" style={{ fontWeight: 700, fontSize: 15, color: T.textPrimary }}>🧾 Sales Transaction Log</span>
           <span className="mono" style={{ fontSize: 11, color: T.textMuted, background: T.bg, border: `1px solid ${T.border}`, borderRadius: 6, padding: '3px 8px' }}>
             {filtSales.length} sale{filtSales.length !== 1 ? 's' : ''} · {range[0]} → {range[1]}
           </span>
@@ -238,32 +444,21 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           </div>
         ) : (
           <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 600 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, minWidth: 680 }}>
               <thead>
                 <tr style={{ background: T.surfaceHigh }}>
-                  {['Date & Time', 'Customer', 'Items Sold', 'Method', 'Unit Price', 'Paid', 'Balance', 'Status'].map((h, i) => (
-                    <th key={i} style={{
-                      textAlign: i >= 4 ? 'right' : 'left',
-                      padding: '10px 12px', color: T.textSecondary,
-                      fontWeight: 600, borderBottom: `2px solid ${T.border}`,
-                      fontSize: 11, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.5,
-                    }}>{h}</th>
+                  {['Time', 'Customer', 'Items & Units', 'Method', 'Calculated', 'Paid / Actual', 'Balance', 'Status'].map((h, i) => (
+                    <th key={i} style={{ textAlign: i >= 4 ? 'right' : 'left', padding: '10px 12px', color: T.textSecondary, fontWeight: 700, borderBottom: `2px solid ${T.border}`, fontSize: 10, whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: 0.5 }}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {[...filtSales]
-                  .sort((a, b) => new Date(b.date) - new Date(a.date))
-                  .map((s, idx) => (
-                  <tr key={s.id} style={{
-                    borderBottom: `1px solid ${T.border}22`,
-                    background: idx % 2 === 0 ? 'transparent' : T.surfaceHigh + '55',
-                    transition: 'background .15s',
-                  }}>
+                {[...filtSales].sort((a, b) => new Date(b.date) - new Date(a.date)).map((s, idx) => (
+                  <tr key={s.id} style={{ borderBottom: `1px solid ${T.border}22`, background: idx % 2 === 0 ? 'transparent' : T.surfaceHigh + '44' }}>
 
-                    {/* Date & Time */}
-                    <td style={{ padding: '11px 12px', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary, fontFamily: 'JetBrains Mono, monospace' }}>
+                    {/* Time */}
+                    <td style={{ padding: '10px 12px', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                      <div className="mono" style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>
                         {new Date(s.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                       </div>
                       <div style={{ fontSize: 10, color: T.textMuted, marginTop: 2 }}>
@@ -272,107 +467,98 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
                     </td>
 
                     {/* Customer */}
-                    <td style={{ padding: '11px 12px', verticalAlign: 'top' }}>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
                       <div style={{ fontWeight: 600, color: T.textPrimary }}>{s.customerName}</div>
-                      {s.contact && <div style={{ fontSize: 11, color: T.textMuted, marginTop: 2 }}>{s.contact}</div>}
+                      {s.contact && <div style={{ fontSize: 11, color: T.textMuted }}>{s.contact}</div>}
                     </td>
 
-                    {/* Items sold — what was sold */}
-                    <td style={{ padding: '11px 12px', verticalAlign: 'top', maxWidth: 220 }}>
+                    {/* Items & units */}
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 200 }}>
                       {s.items.map((item, x) => (
-                        <div key={x} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: x < s.items.length - 1 ? 5 : 0 }}>
-                          <div style={{ width: 7, height: 7, borderRadius: '50%', background: CHART_PAL[x % CHART_PAL.length], flexShrink: 0 }} />
-                          <span style={{ color: T.textPrimary, fontSize: 12, fontWeight: 500 }}>{item.productName}</span>
-                          <span style={{ fontSize: 11, color: T.textMuted, fontFamily: 'JetBrains Mono, monospace' }}>×{item.qty}</span>
+                        <div key={x} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: x < s.items.length - 1 ? 4 : 0 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: '50%', background: CHART_PAL[x % CHART_PAL.length], flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: T.textPrimary }}>{item.productName}</span>
+                          {/* Units badge */}
+                          <span style={{ fontSize: 10, background: T.accent+'22', color: T.accent, border: `1px solid ${T.accent}33`, borderRadius: 4, padding: '1px 5px', fontWeight: 700, fontFamily: 'JetBrains Mono, monospace', flexShrink: 0 }}>
+                            ×{item.qty}
+                          </span>
+                          <span className="mono" style={{ fontSize: 10, color: T.textMuted, flexShrink: 0 }}>{cur(item.unitPrice)}</span>
                         </div>
                       ))}
-                      {/* Subtotal row */}
-                      <div style={{ marginTop: 7, paddingTop: 6, borderTop: `1px dashed ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 10, color: T.textMuted }}>
+                      <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px dashed ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
                           {s.items.reduce((a, i) => a + i.qty, 0)} unit{s.items.reduce((a, i) => a + i.qty, 0) !== 1 ? 's' : ''}
                         </span>
-                        <span className="mono" style={{ fontSize: 12, fontWeight: 700, color: T.textPrimary }}>
-                          {cur(s.totalAmount)}
-                        </span>
                       </div>
                     </td>
 
-                    {/* Payment method */}
-                    <td style={{ padding: '11px 12px', verticalAlign: 'top' }}>
-                      <div style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        background: s.paymentMethod === 'cash' ? GRN + '22' : BLU + '22',
-                        border: `1px solid ${s.paymentMethod === 'cash' ? GRN : BLU}44`,
-                        borderRadius: 6, padding: '4px 8px',
-                      }}>
-                        <span style={{ fontSize: 13 }}>{s.paymentMethod === 'cash' ? '💵' : '📲'}</span>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: s.paymentMethod === 'cash' ? GRN : BLU, textTransform: 'capitalize' }}>
-                          {s.paymentMethod}
-                        </span>
+                    {/* Method */}
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.paymentMethod === 'cash' ? GRN+'22' : BLU+'22', border: `1px solid ${s.paymentMethod === 'cash' ? GRN : BLU}44`, borderRadius: 6, padding: '3px 7px' }}>
+                        <span style={{ fontSize: 11 }}>{s.paymentMethod === 'cash' ? '💵' : '📲'}</span>
+                        <span style={{ fontSize: 10, fontWeight: 600, color: s.paymentMethod === 'cash' ? GRN : BLU, textTransform: 'capitalize' }}>{s.paymentMethod}</span>
                       </div>
                     </td>
 
-                    {/* Unit price per item */}
-                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
-                      {s.items.map((item, x) => (
-                        <div key={x} className="mono" style={{ fontSize: 12, color: T.textSecondary, marginBottom: x < s.items.length - 1 ? 5 : 0 }}>
-                          {cur(item.unitPrice)}
+                    {/* Calculated total */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      <span className="mono" style={{ color: T.textSecondary, fontSize: 12 }}>{cur(s.totalAmount)}</span>
+                    </td>
+
+                    {/* Paid / actual — highlight if different from total */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                      <span className="mono" style={{ color: GRN, fontWeight: 700, fontSize: 13 }}>{cur(s.amountPaid)}</span>
+                      {s.amountPaid !== s.totalAmount && (
+                        <div style={{ fontSize: 9, color: AMB, marginTop: 2, fontWeight: 600 }}>
+                          of {cur(s.totalAmount)}
                         </div>
-                      ))}
+                      )}
                     </td>
 
-                    {/* Amount paid */}
-                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
-                      <span className="mono" style={{ color: GRN, fontWeight: 700, fontSize: 13 }}>
-                        {cur(s.amountPaid)}
-                      </span>
-                    </td>
-
-                    {/* Balance due */}
-                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                    {/* Balance */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
                       {s.balance > 0
-                        ? <span className="mono" style={{ color: RED, fontWeight: 700, fontSize: 13 }}>-{cur(s.balance)}</span>
-                        : <span style={{ color: T.textMuted, fontSize: 12 }}>—</span>
-                      }
+                        ? <span className="mono" style={{ color: RED, fontWeight: 700 }}>-{cur(s.balance)}</span>
+                        : <span style={{ color: T.textMuted, fontSize: 12 }}>—</span>}
                     </td>
 
-                    {/* Status badge */}
-                    <td style={{ padding: '11px 12px', textAlign: 'right', verticalAlign: 'top' }}>
+                    {/* Status */}
+                    <td style={{ padding: '10px 12px', textAlign: 'right', verticalAlign: 'top' }}>
                       <span style={{
-                        fontSize: 11, fontWeight: 600, padding: '4px 9px', borderRadius: 6, whiteSpace: 'nowrap',
-                        background: s.status === 'Paid' ? GRN + '22' : s.status === 'Partial' ? AMB + '22' : RED + '22',
-                        color:      s.status === 'Paid' ? GRN      : s.status === 'Partial' ? AMB      : RED,
-                        border: `1px solid ${s.status === 'Paid' ? GRN : s.status === 'Partial' ? AMB : RED}44`,
+                        fontSize: 11, fontWeight: 600, padding: '3px 8px', borderRadius: 6, whiteSpace: 'nowrap',
+                        background: s.status==='Paid' ? GRN+'22' : s.status==='Partial' ? AMB+'22' : RED+'22',
+                        color:      s.status==='Paid' ? GRN      : s.status==='Partial' ? AMB      : RED,
+                        border: `1px solid ${s.status==='Paid' ? GRN : s.status==='Partial' ? AMB : RED}44`,
                       }}>
-                        {s.status === 'Paid' ? '✅ Paid' : s.status === 'Partial' ? '⚠️ Partial' : '🔴 Unpaid'}
+                        {s.status==='Paid' ? '✅ Paid' : s.status==='Partial' ? '⚠️ Partial' : '🔴 Unpaid'}
                       </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
-
-              {/* Summary footer */}
               <tfoot>
                 <tr style={{ borderTop: `2px solid ${T.border}`, background: T.surfaceHigh }}>
                   <td colSpan={2} style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 11, color: T.textSecondary, fontWeight: 600 }}>
-                      {filtSales.length} sales ·{' '}
-                      {filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)} units sold
+                      {filtSales.length} sales · {totalUnits} units
                     </span>
                   </td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 11, color: T.textMuted }}>
-                      {filtSales.filter(s => s.paymentMethod === 'cash').length} cash ·{' '}
-                      {filtSales.filter(s => s.paymentMethod === 'transfer').length} transfer
+                      {filtSales.filter(s => s.paymentMethod==='cash').length} cash · {filtSales.filter(s => s.paymentMethod==='transfer').length} transfer
                     </span>
                   </td>
-                  <td colSpan={2} />
+                  <td />
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>COLLECTED</div>
-                    <span className="mono" style={{ color: GRN, fontWeight: 700 }}>{cur(totalRev)}</span>
+                    <div style={{ fontSize: 9, color: T.textMuted, marginBottom: 2, fontWeight: 700 }}>TOTAL CALC</div>
+                    <span className="mono" style={{ color: T.textSecondary, fontWeight: 700 }}>{cur(totalCalc)}</span>
                   </td>
                   <td style={{ padding: '10px 12px', textAlign: 'right' }}>
-                    <div style={{ fontSize: 10, color: T.textMuted, marginBottom: 2 }}>OUTSTANDING</div>
+                    <div style={{ fontSize: 9, color: T.textMuted, marginBottom: 2, fontWeight: 700 }}>COLLECTED</div>
+                    <span className="mono" style={{ color: GRN, fontWeight: 800 }}>{cur(totalRev)}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                    <div style={{ fontSize: 9, color: T.textMuted, marginBottom: 2, fontWeight: 700 }}>OUTSTANDING</div>
                     <span className="mono" style={{ color: totalUncol > 0 ? RED : T.textMuted, fontWeight: 700 }}>{cur(totalUncol)}</span>
                   </td>
                   <td />
@@ -382,7 +568,6 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           </div>
         )}
       </div>
-
     </div>
   )
 }
