@@ -19,9 +19,6 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const [cWeek,  setCWeek]  = useState(thisWeekRange()[0])
   const [cMonth, setCMonth] = useState(todayStr().slice(0, 7))
 
-  // ── Cash verification state ──────────────────────────────────────────────
-  const [actualCash, setActualCash] = useState('')
-
   // ── Date range ─────────────────────────────────────────────────────────────
   let range
   if (period === 'daily') {
@@ -44,14 +41,21 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const totalUncol  = filtSales.reduce((a, s) => a + s.balance, 0)
   const lendPend    = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
   const borrPend    = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
-  const cashTotal   = filtSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + s.amountPaid, 0)
-  const xferTotal   = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
-  const totalUnits  = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
+  const cashTotal       = filtSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + s.amountPaid, 0)
+  const xferTotal       = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
+  const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
 
-  // ── Cash verification calc ─────────────────────────────────────────────────
-  const actual     = parseFloat(actualCash) || 0
-  const cashDiff   = actual - totalRev
-  const hasCashEntry = actualCash !== ''
+  // ── Actual cash recorded from sales entries ────────────────────────────────
+  // Only sales that have actual_cash recorded
+  const salesWithCash   = filtSales.filter(s => s.paymentMethod === 'cash' && s.actualCash != null)
+  const totalActualCash = salesWithCash.reduce((a, s) => a + (s.actualCash || 0), 0)
+  const totalExpectedCash = salesWithCash.reduce((a, s) => a + s.amountPaid, 0)
+  const cashDiff        = totalActualCash - totalExpectedCash
+  const hasCashData     = salesWithCash.length > 0
+  // Per-sale cash differences
+  const salesWithGap    = salesWithCash.filter(s => s.actualCash !== s.amountPaid)
+  const overSales       = salesWithCash.filter(s => (s.actualCash||0) > s.amountPaid)
+  const shortSales      = salesWithCash.filter(s => (s.actualCash||0) < s.amountPaid)
 
   // ── Products performance table ─────────────────────────────────────────────
   const prodStats = {}
@@ -152,25 +156,25 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════
-          CASH VERIFICATION PANEL
+          CASH PANEL — from recorded sales actual cash fields
           ════════════════════════════════════════════════════════════════ */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
         <SecTitle T={T} right={
           <span style={{ fontSize: 11, color: T.textMuted }}>
-            {filtSales.length} sale{filtSales.length !== 1 ? 's' : ''} in period
+            {salesWithCash.length} of {filtSales.filter(s=>s.paymentMethod==='cash').length} cash sales have actual amount recorded
           </span>
         }>
-          💰 Cash Verification
+          💰 Cash Collection Report
         </SecTitle>
 
-        {/* Calculated totals row */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px,1fr))', gap: 10, marginBottom: 16 }}>
+        {/* Summary tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 10, marginBottom: 16 }}>
           {[
-            { label: 'Calculated Total',  value: totalCalc,   color: T.textPrimary, hint: 'Sum of all sale amounts' },
-            { label: 'Amount Collected',  value: totalRev,    color: GRN,           hint: 'Payments received' },
-            { label: 'Still Owed',        value: totalUncol,  color: totalUncol > 0 ? RED : T.textMuted, hint: 'Unpaid balances' },
-            { label: 'Cash (💵)',         value: cashTotal,   color: GRN,           hint: 'Cash payments only' },
-            { label: 'Transfer (📲)',     value: xferTotal,   color: BLU,           hint: 'Transfer payments only' },
+            { label: 'Calculated Total',  value: totalCalc,         color: T.textPrimary, hint: 'All sale amounts' },
+            { label: 'Amount Collected',  value: totalRev,          color: GRN,           hint: 'Paid by customers' },
+            { label: 'Still Owed',        value: totalUncol,        color: totalUncol>0 ? RED : T.textMuted, hint: 'Unpaid balance' },
+            { label: 'Cash Sales',        value: cashTotal,         color: GRN,           hint: '💵 Cash payments' },
+            { label: 'Transfer Sales',    value: xferTotal,         color: BLU,           hint: '📲 Transfer payments' },
           ].map((s, i) => (
             <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px' }}>
               <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>{s.label}</div>
@@ -180,83 +184,112 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           ))}
         </div>
 
-        {/* Actual cash input */}
-        <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 12, padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <Icon name="dollar" size={14} color={T.accent} strokeWidth={2.5} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: T.textPrimary }}>Enter Actual Cash Counted</span>
+        {/* Actual cash recorded from sales */}
+        {!hasCashData ? (
+          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
+            <div style={{ fontSize: 28, marginBottom: 8 }}>💵</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary, marginBottom: 4 }}>No actual cash recorded yet</div>
+            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
+              When recording a cash sale, fill in the <strong style={{ color: T.accent }}>"Actual Cash Collected"</strong> field
+              to track exact cash received. The difference will appear here automatically.
+            </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <input
-              type="number"
-              value={actualCash}
-              onChange={e => setActualCash(e.target.value)}
-              placeholder="Count your cash and enter the total..."
-              style={{ flex: 1, minWidth: 200, fontSize: 15, fontWeight: 600 }}
-            />
-            {hasCashEntry && (
-              <button onClick={() => setActualCash('')}
-                style={{ padding: '8px 12px', borderRadius: 8, border: `1px solid ${T.border}`, background: 'transparent', color: T.textMuted, cursor: 'pointer', fontSize: 12 }}>
-                Clear
-              </button>
-            )}
-          </div>
-
-          {/* Result panel */}
-          {hasCashEntry && actual > 0 && (
-            <div style={{ marginTop: 14 }}>
-              {/* 3 comparison tiles */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Recorded</div>
-                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: T.textPrimary }}>{cur(totalRev)}</div>
-                </div>
-                <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px', textAlign: 'center' }}>
-                  <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Actual Cash</div>
-                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: T.accent }}>{cur(actual)}</div>
-                </div>
-                <div style={{
-                  background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
-                  border: `1px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
-                  borderRadius: 10, padding: '10px 12px', textAlign: 'center',
-                }}>
-                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', marginBottom: 4, color: T.textMuted }}>Difference</div>
-                  <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED }}>
-                    {cashDiff === 0 ? '±0' : cashDiff > 0 ? `+${cur(cashDiff)}` : `-${cur(Math.abs(cashDiff))}`}
-                  </div>
-                </div>
+        ) : (
+          <div>
+            {/* 3 comparison tiles */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
+              <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Expected Cash</div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: T.textPrimary }}>{cur(totalExpectedCash)}</div>
+                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{salesWithCash.length} transactions</div>
               </div>
-
-              {/* Status message */}
+              <div style={{ background: GRN+'18', border: `1px solid ${GRN}33`, borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
+                <div style={{ fontSize: 9, color: GRN, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Actual Cash</div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: GRN }}>{cur(totalActualCash)}</div>
+                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>physically collected</div>
+              </div>
               <div style={{
-                borderRadius: 10, padding: '12px 16px',
                 background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
-                border: `1.5px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
-                display: 'flex', alignItems: 'flex-start', gap: 12,
+                border: `2px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}55`,
+                borderRadius: 10, padding: '12px 14px', textAlign: 'center',
               }}>
-                <span style={{ fontSize: 22, flexShrink: 0 }}>
-                  {cashDiff === 0 ? '✅' : cashDiff > 0 ? '💰' : '⚠️'}
-                </span>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED, marginBottom: 4 }}>
-                    {cashDiff === 0
-                      ? 'Perfect match — cash is correct!'
-                      : cashDiff > 0
-                        ? `Over by ${cur(cashDiff)} — you have extra cash`
-                        : `Short by ${cur(Math.abs(cashDiff))} — cash is missing`}
-                  </div>
-                  <div style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5 }}>
-                    {cashDiff === 0
-                      ? 'Your actual cash matches all recorded payments exactly.'
-                      : cashDiff > 0
-                        ? 'You may have an unrecorded sale, or received extra money not entered into the system.'
-                        : 'Check for expenses paid in cash, unrecorded refunds, or missing sales entries.'}
-                  </div>
+                <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6, color: T.textMuted }}>Difference</div>
+                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED }}>
+                  {cashDiff === 0 ? '±0' : cashDiff > 0 ? `+${cur(cashDiff)}` : `-${cur(Math.abs(cashDiff))}`}
+                </div>
+                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>
+                  {cashDiff === 0 ? 'perfect' : cashDiff > 0 ? 'over' : 'short'}
                 </div>
               </div>
             </div>
-          )}
-        </div>
+
+            {/* Status banner */}
+            <div style={{
+              borderRadius: 10, padding: '12px 16px', marginBottom: salesWithGap.length > 0 ? 12 : 0,
+              background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
+              border: `1.5px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+            }}>
+              <span style={{ fontSize: 22, flexShrink: 0 }}>
+                {cashDiff === 0 ? '✅' : cashDiff > 0 ? '💰' : '⚠️'}
+              </span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED, marginBottom: 4 }}>
+                  {cashDiff === 0
+                    ? 'Perfect — actual cash matches expected amount!'
+                    : cashDiff > 0
+                      ? `Over by ${cur(cashDiff)} — customer gave extra cash`
+                      : `Short by ${cur(Math.abs(cashDiff))} — cash is less than expected`}
+                </div>
+                <div style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5 }}>
+                  {cashDiff === 0
+                    ? `All ${salesWithCash.length} cash transaction${salesWithCash.length!==1?'s':''} match perfectly.`
+                    : cashDiff > 0
+                      ? `${overSales.length} sale${overSales.length!==1?'s':''} with extra cash received. Check if change needs to be returned.`
+                      : `${shortSales.length} sale${shortSales.length!==1?'s':''} with less cash than expected. Customer may still owe money.`}
+                </div>
+              </div>
+            </div>
+
+            {/* Per-sale breakdown if there are gaps */}
+            {salesWithGap.length > 0 && (
+              <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 14px', borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: .5 }}>
+                  Transactions with differences ({salesWithGap.length})
+                </div>
+                {salesWithGap.map((s, i) => {
+                  const diff = (s.actualCash||0) - s.amountPaid
+                  return (
+                    <div key={s.id} style={{ padding: '10px 14px', borderBottom: i < salesWithGap.length-1 ? `1px solid ${T.border}22` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{s.customerName}</div>
+                        <div style={{ fontSize: 10, color: T.textMuted }}>
+                          {new Date(s.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {new Date(s.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>EXPECTED</div>
+                          <span className="mono" style={{ fontSize: 12, color: T.textSecondary }}>{cur(s.amountPaid)}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>ACTUAL</div>
+                          <span className="mono" style={{ fontSize: 12, color: GRN }}>{cur(s.actualCash)}</span>
+                        </div>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>DIFF</div>
+                          <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: diff > 0 ? BLU : RED }}>
+                            {diff > 0 ? `+${cur(diff)}` : `-${cur(Math.abs(diff))}`}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Revenue vs Expenses chart ── */}

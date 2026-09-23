@@ -75,7 +75,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     customerName:'', contact:'',
     date: todayStr(), time: new Date().toTimeString().slice(0,5),
     items: [{ productId:'', productName:'', qty:1, unitPrice:0, variant:'' }],
-    paymentMethod:'cash', amountPaid:'', dueDate:'', notes:'', sendToLend:true,
+    paymentMethod:'cash', amountPaid:'', actualCash:'', dueDate:'', notes:'', sendToLend:true,
   })
   const [form, setForm] = useState(mkBlank())
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
@@ -135,7 +135,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
       items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
-      paymentMethod: s.paymentMethod, amountPaid: s.amountPaid,
+      paymentMethod: s.paymentMethod, amountPaid: s.amountPaid, actualCash: s.actualCash != null ? String(s.actualCash) : '',
       dueDate:'', notes: s.notes || '', sendToLend: false,
     })
     setShow(true)
@@ -212,7 +212,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: +form.amountPaid||0, balance: bal, paymentMethod: form.paymentMethod, status, notes: form.notes } : s))
         setEditSale(null)
       } else {
-        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: +form.amountPaid||0, balance: bal, paymentMethod: form.paymentMethod, notes: form.notes, status }
+        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: +form.amountPaid||0, actualCash: form.actualCash !== '' ? +form.actualCash : null, balance: bal, paymentMethod: form.paymentMethod, notes: form.notes, status }
         let created
         if (isDemo) {
           created = demoApi.sales.create(sale)
@@ -229,7 +229,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: Math.max(0, prod.stock - item.qty) })
         }
         setProducts(ps => ps.map(p => { const it = validItems.find(i => i.productId === p.id); return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p }))
-        setSales(ss => [{ ...sale, id: created.id }, ...ss])
+        setSales(ss => [{ ...sale, id: created.id, actualCash: sale.actualCash }, ...ss])
         // Auto-add to lending if balance due
         if (bal > 0 && form.sendToLend && !isDemo) {
           const lEntry = { personName: form.customerName, contact: form.contact, amount: bal, date: dt, dueDate: form.dueDate||'', notes: form.notes, status:'Pending', source:'sale', saleId: created.id }
@@ -485,6 +485,31 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               <input type="number" value={form.amountPaid} onChange={e => sf('amountPaid',e.target.value)} placeholder={rowTotal>0?`Max ${cur(rowTotal)}`:'0.00'} style={{ fontSize:13, padding:'7px 9px' }} />
             </Lbl>
           </div>
+
+          {/* Actual cash collected */}
+          {form.paymentMethod === 'cash' && (
+            <div style={{ background: GRN+'0a', border:`1px solid ${GRN}33`, borderRadius:10, padding:'10px 12px', marginBottom:10 }}>
+              <div style={{ fontSize:10, color:GRN, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:6, display:'flex', alignItems:'center', gap:6 }}>
+                <Icon name="dollar" size={11} color={GRN} strokeWidth={2.5} />
+                Actual Cash Collected (optional)
+              </div>
+              <input type="number"
+                value={form.actualCash}
+                onChange={e => sf('actualCash', e.target.value)}
+                placeholder={form.amountPaid ? `Expected: ${cur(+form.amountPaid||0)}` : 'Enter physical cash received'}
+                style={{ fontSize:13, padding:'7px 9px', width:'100%', boxSizing:'border-box' }} />
+              {form.actualCash !== '' && form.amountPaid !== '' && (
+                <div style={{ marginTop:6, fontSize:11, fontWeight:600,
+                  color: +form.actualCash === +form.amountPaid ? GRN : +form.actualCash > +form.amountPaid ? BLU : RED }}>
+                  {+form.actualCash === +form.amountPaid
+                    ? '✅ Exact match'
+                    : +form.actualCash > +form.amountPaid
+                      ? `💰 Over by ${cur(+form.actualCash - +form.amountPaid)} — give change`
+                      : `⚠️ Short by ${cur(+form.amountPaid - +form.actualCash)}`}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Balance */}
           {!editSale && rowBal > 0 && (
