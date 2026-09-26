@@ -4,7 +4,7 @@
 //  • Sales by product table — units sold, revenue, % of total
 //  • Transaction log — improved with cash column
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -18,6 +18,11 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const [cDate,  setCDate]  = useState(todayStr())
   const [cWeek,  setCWeek]  = useState(thisWeekRange()[0])
   const [cMonth, setCMonth] = useState(todayStr().slice(0, 7))
+
+  // ── Daily cash flow state ──────────────────────────────────────────────────
+  const [cashFlowDate,   setCashFlowDate]   = useState(todayStr())
+  const [cashFlowActual, setCashFlowActual] = useState('')
+  const [cashFlowResult, setCashFlowResult] = useState(null)
 
   // ── Date range ─────────────────────────────────────────────────────────────
   let range
@@ -45,17 +50,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const xferTotal       = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
   const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
 
-  // ── Actual cash recorded from sales entries ────────────────────────────────
-  // Only sales that have actual_cash recorded
-  const salesWithCash   = filtSales.filter(s => s.paymentMethod === 'cash' && s.actualCash != null)
-  const totalActualCash = salesWithCash.reduce((a, s) => a + (s.actualCash || 0), 0)
-  const totalExpectedCash = salesWithCash.reduce((a, s) => a + s.amountPaid, 0)
-  const cashDiff        = totalActualCash - totalExpectedCash
-  const hasCashData     = salesWithCash.length > 0
-  // Per-sale cash differences
-  const salesWithGap    = salesWithCash.filter(s => s.actualCash !== s.amountPaid)
-  const overSales       = salesWithCash.filter(s => (s.actualCash||0) > s.amountPaid)
-  const shortSales      = salesWithCash.filter(s => (s.actualCash||0) < s.amountPaid)
+
 
   // ── Products performance table ─────────────────────────────────────────────
   const prodStats = {}
@@ -92,6 +87,19 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const expPie  = Object.entries(expCatMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
   const payPie  = [{ name: 'Cash', value: cashTotal }, { name: 'Transfer', value: xferTotal }].filter(p => p.value > 0)
   const tipStyle = { background: T.surfaceHigh, border: `1px solid ${T.border}`, borderRadius: 8, color: T.textPrimary }
+
+  // ── Record and compare daily cash flow ────────────────────────────────────
+  const recordCashFlow = () => {
+    const daySales   = sales.filter(s => s.date.slice(0,10) === cashFlowDate)
+    const calculated = daySales.reduce((a,s) => a + s.amountPaid, 0)
+    const actual     = parseFloat(cashFlowActual) || 0
+    const diff       = actual - calculated
+    const cashSales  = daySales.filter(s => s.paymentMethod==='cash').reduce((a,s) => a + s.amountPaid, 0)
+    const xferSales  = daySales.filter(s => s.paymentMethod==='transfer').reduce((a,s) => a + s.amountPaid, 0)
+    const cashCount  = daySales.filter(s => s.paymentMethod==='cash').length
+    const xferCount  = daySales.filter(s => s.paymentMethod==='transfer').length
+    setCashFlowResult({ calculated, actual, diff, txCount: daySales.length, date: cashFlowDate, cashSales, xferSales, cashCount, xferCount })
+  }
 
   const PieCard = ({ title, data, empty, valColor }) => (
     <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20 }}>
@@ -156,143 +164,143 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
       </div>
 
       {/* ════════════════════════════════════════════════════════════════════
-          CASH PANEL — from recorded sales actual cash fields
+          DAILY CASH FLOW — record actual cash & compare with calculated
           ════════════════════════════════════════════════════════════════ */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
         <SecTitle T={T} right={
           <span style={{ fontSize: 11, color: T.textMuted }}>
-            {salesWithCash.length} of {filtSales.filter(s=>s.paymentMethod==='cash').length} cash sales have actual amount recorded
+            {filtSales.filter(s=>s.paymentMethod==='cash').length} cash · {filtSales.filter(s=>s.paymentMethod==='transfer').length} transfer
           </span>
         }>
-          💰 Cash Collection Report
+          💰 Cash Flow — {range[0] === range[1] ? range[0] : `${range[0]} → ${range[1]}`}
         </SecTitle>
 
         {/* Summary tiles */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 10, marginBottom: 16 }}>
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))', gap:10, marginBottom:16 }}>
           {[
-            { label: 'Calculated Total',  value: totalCalc,         color: T.textPrimary, hint: 'All sale amounts' },
-            { label: 'Amount Collected',  value: totalRev,          color: GRN,           hint: 'Paid by customers' },
-            { label: 'Still Owed',        value: totalUncol,        color: totalUncol>0 ? RED : T.textMuted, hint: 'Unpaid balance' },
-            { label: 'Cash Sales',        value: cashTotal,         color: GRN,           hint: '💵 Cash payments' },
-            { label: 'Transfer Sales',    value: xferTotal,         color: BLU,           hint: '📲 Transfer payments' },
-          ].map((s, i) => (
-            <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px' }}>
-              <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>{s.label}</div>
-              <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{cur(s.value)}</div>
-              <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{s.hint}</div>
+            { label:'Calculated Total', value:totalCalc,  color:T.textPrimary, hint:'Sum of all sales' },
+            { label:'Amount Collected', value:totalRev,   color:GRN,           hint:'Payments received' },
+            { label:'Still Owed',       value:totalUncol, color:totalUncol>0?RED:T.textMuted, hint:'Unpaid balances' },
+            { label:'Cash 💵',          value:cashTotal,  color:GRN,           hint:'Cash payments' },
+            { label:'Transfer 📲',      value:xferTotal,  color:BLU,           hint:'Transfer payments' },
+          ].map((s,i) => (
+            <div key={i} style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:'10px 12px' }}>
+              <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>{s.label}</div>
+              <div className="mono" style={{ fontSize:16, fontWeight:800, color:s.color }}>{cur(s.value)}</div>
+              <div style={{ fontSize:9, color:T.textMuted, marginTop:3 }}>{s.hint}</div>
             </div>
           ))}
         </div>
 
-        {/* Actual cash recorded from sales */}
-        {!hasCashData ? (
-          <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: 28, marginBottom: 8 }}>💵</div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary, marginBottom: 4 }}>No actual cash recorded yet</div>
-            <div style={{ fontSize: 12, color: T.textMuted, lineHeight: 1.6 }}>
-              When recording a cash sale, fill in the <strong style={{ color: T.accent }}>"Actual Cash Collected"</strong> field
-              to track exact cash received. The difference will appear here automatically.
+        {/* Daily cash recorder */}
+        <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
+            <Icon name="dollar" size={14} color={T.accent} strokeWidth={2.5} />
+            <span style={{ fontSize:13, fontWeight:700, color:T.textPrimary }}>Record Actual Cash Collected</span>
+          </div>
+          <p style={{ fontSize:12, color:T.textMuted, marginBottom:14, lineHeight:1.5 }}>
+            Count your physical cash and enter the total below. We'll compare it with your recorded sales automatically.
+          </p>
+
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }} className="g2">
+            <div>
+              <label style={{ fontSize:10, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Date</label>
+              <input type="date" value={cashFlowDate} onChange={e => { setCashFlowDate(e.target.value); setCashFlowResult(null) }}
+                style={{ width:'100%', fontSize:13 }} />
+            </div>
+            <div>
+              <label style={{ fontSize:10, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Actual Cash in Hand</label>
+              <input type="number" value={cashFlowActual} onChange={e => { setCashFlowActual(e.target.value); setCashFlowResult(null) }}
+                placeholder="Enter total cash counted..." style={{ width:'100%', fontSize:15, fontWeight:700 }} />
             </div>
           </div>
-        ) : (
-          <div>
-            {/* 3 comparison tiles */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 12 }}>
-              <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Expected Cash</div>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: T.textPrimary }}>{cur(totalExpectedCash)}</div>
-                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{salesWithCash.length} transactions</div>
+
+          <Btn onClick={recordCashFlow} disabled={!cashFlowActual} icon="check" full>
+            Compare Cash
+          </Btn>
+
+          {/* Result */}
+          {cashFlowResult && (
+            <div style={{ marginTop:16 }}>
+              {/* 3 tiles */}
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10, marginBottom:12 }}>
+                <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:10, padding:'12px 14px', textAlign:'center' }}>
+                  <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:6 }}>Calculated</div>
+                  <div className="mono" style={{ fontSize:20, fontWeight:800, color:T.textPrimary }}>{cur(cashFlowResult.calculated)}</div>
+                  <div style={{ fontSize:10, color:T.textMuted, marginTop:3 }}>{cashFlowResult.txCount} sale{cashFlowResult.txCount!==1?'s':''}</div>
+                </div>
+                <div style={{ background:GRN+'18', border:`1px solid ${GRN}33`, borderRadius:10, padding:'12px 14px', textAlign:'center' }}>
+                  <div style={{ fontSize:9, color:GRN, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:6 }}>Actual Cash</div>
+                  <div className="mono" style={{ fontSize:20, fontWeight:800, color:GRN }}>{cur(cashFlowResult.actual)}</div>
+                  <div style={{ fontSize:10, color:T.textMuted, marginTop:3 }}>physically counted</div>
+                </div>
+                <div style={{
+                  background: cashFlowResult.diff===0 ? GRN+'18' : cashFlowResult.diff>0 ? BLU+'18' : RED+'18',
+                  border:`2px solid ${cashFlowResult.diff===0?GRN:cashFlowResult.diff>0?BLU:RED}55`,
+                  borderRadius:10, padding:'12px 14px', textAlign:'center',
+                }}>
+                  <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:6, color:T.textMuted }}>Difference</div>
+                  <div className="mono" style={{ fontSize:20, fontWeight:800, color:cashFlowResult.diff===0?GRN:cashFlowResult.diff>0?BLU:RED }}>
+                    {cashFlowResult.diff===0 ? '±0' : cashFlowResult.diff>0 ? `+${cur(cashFlowResult.diff)}` : `-${cur(Math.abs(cashFlowResult.diff))}`}
+                  </div>
+                  <div style={{ fontSize:10, color:T.textMuted, marginTop:3 }}>
+                    {cashFlowResult.diff===0 ? 'perfect match' : cashFlowResult.diff>0 ? 'over' : 'short'}
+                  </div>
+                </div>
               </div>
-              <div style={{ background: GRN+'18', border: `1px solid ${GRN}33`, borderRadius: 10, padding: '12px 14px', textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: GRN, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6 }}>Actual Cash</div>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: GRN }}>{cur(totalActualCash)}</div>
-                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>physically collected</div>
-              </div>
+
+              {/* Status message */}
               <div style={{
-                background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
-                border: `2px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}55`,
-                borderRadius: 10, padding: '12px 14px', textAlign: 'center',
+                borderRadius:10, padding:'14px 16px',
+                background: cashFlowResult.diff===0 ? GRN+'18' : cashFlowResult.diff>0 ? BLU+'18' : RED+'18',
+                border:`1.5px solid ${cashFlowResult.diff===0?GRN:cashFlowResult.diff>0?BLU:RED}44`,
+                display:'flex', alignItems:'flex-start', gap:12,
               }}>
-                <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 6, color: T.textMuted }}>Difference</div>
-                <div className="mono" style={{ fontSize: 18, fontWeight: 800, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED }}>
-                  {cashDiff === 0 ? '±0' : cashDiff > 0 ? `+${cur(cashDiff)}` : `-${cur(Math.abs(cashDiff))}`}
-                </div>
-                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>
-                  {cashDiff === 0 ? 'perfect' : cashDiff > 0 ? 'over' : 'short'}
-                </div>
-              </div>
-            </div>
-
-            {/* Status banner */}
-            <div style={{
-              borderRadius: 10, padding: '12px 16px', marginBottom: salesWithGap.length > 0 ? 12 : 0,
-              background: cashDiff === 0 ? GRN+'18' : cashDiff > 0 ? BLU+'18' : RED+'18',
-              border: `1.5px solid ${cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED}44`,
-              display: 'flex', alignItems: 'flex-start', gap: 12,
-            }}>
-              <span style={{ fontSize: 22, flexShrink: 0 }}>
-                {cashDiff === 0 ? '✅' : cashDiff > 0 ? '💰' : '⚠️'}
-              </span>
-              <div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: cashDiff === 0 ? GRN : cashDiff > 0 ? BLU : RED, marginBottom: 4 }}>
-                  {cashDiff === 0
-                    ? 'Perfect — actual cash matches expected amount!'
-                    : cashDiff > 0
-                      ? `Over by ${cur(cashDiff)} — customer gave extra cash`
-                      : `Short by ${cur(Math.abs(cashDiff))} — cash is less than expected`}
-                </div>
-                <div style={{ fontSize: 12, color: T.textSecondary, lineHeight: 1.5 }}>
-                  {cashDiff === 0
-                    ? `All ${salesWithCash.length} cash transaction${salesWithCash.length!==1?'s':''} match perfectly.`
-                    : cashDiff > 0
-                      ? `${overSales.length} sale${overSales.length!==1?'s':''} with extra cash received. Check if change needs to be returned.`
-                      : `${shortSales.length} sale${shortSales.length!==1?'s':''} with less cash than expected. Customer may still owe money.`}
-                </div>
-              </div>
-            </div>
-
-            {/* Per-sale breakdown if there are gaps */}
-            {salesWithGap.length > 0 && (
-              <div style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, overflow: 'hidden' }}>
-                <div style={{ padding: '10px 14px', borderBottom: `1px solid ${T.border}`, fontSize: 11, fontWeight: 700, color: T.textMuted, textTransform: 'uppercase', letterSpacing: .5 }}>
-                  Transactions with differences ({salesWithGap.length})
-                </div>
-                {salesWithGap.map((s, i) => {
-                  const diff = (s.actualCash||0) - s.amountPaid
-                  return (
-                    <div key={s.id} style={{ padding: '10px 14px', borderBottom: i < salesWithGap.length-1 ? `1px solid ${T.border}22` : 'none', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: T.textPrimary }}>{s.customerName}</div>
-                        <div style={{ fontSize: 10, color: T.textMuted }}>
-                          {new Date(s.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {new Date(s.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>EXPECTED</div>
-                          <span className="mono" style={{ fontSize: 12, color: T.textSecondary }}>{cur(s.amountPaid)}</span>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>ACTUAL</div>
-                          <span className="mono" style={{ fontSize: 12, color: GRN }}>{cur(s.actualCash)}</span>
-                        </div>
-                        <div style={{ textAlign: 'right' }}>
-                          <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700 }}>DIFF</div>
-                          <span className="mono" style={{ fontSize: 13, fontWeight: 800, color: diff > 0 ? BLU : RED }}>
-                            {diff > 0 ? `+${cur(diff)}` : `-${cur(Math.abs(diff))}`}
-                          </span>
-                        </div>
-                      </div>
+                <span style={{ fontSize:26, flexShrink:0 }}>
+                  {cashFlowResult.diff===0 ? '✅' : cashFlowResult.diff>0 ? '💰' : '⚠️'}
+                </span>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:15, color:cashFlowResult.diff===0?GRN:cashFlowResult.diff>0?BLU:RED, marginBottom:5 }}>
+                    {cashFlowResult.diff===0
+                      ? 'Perfect — your cash matches the recorded sales!'
+                      : cashFlowResult.diff>0
+                        ? `Over by ${cur(cashFlowResult.diff)} — you have extra cash`
+                        : `Short by ${cur(Math.abs(cashFlowResult.diff))} — cash is less than expected`}
+                  </div>
+                  <div style={{ fontSize:12, color:T.textSecondary, lineHeight:1.6 }}>
+                    {cashFlowResult.diff===0
+                      ? `All ${cashFlowResult.txCount} sales for ${cashFlowResult.date} add up perfectly. Books are balanced.`
+                      : cashFlowResult.diff>0
+                        ? 'Possible causes: unrecorded sale, customer overpaid, or change not given back.'
+                        : 'Possible causes: cash expense not recorded, missing sale entry, or theft/loss.'}
+                  </div>
+                  {cashFlowResult.txCount === 0 && (
+                    <div style={{ marginTop:8, fontSize:12, color:AMB, fontWeight:600 }}>
+                      ⚠️ No sales recorded for this date — make sure you selected the right date.
                     </div>
-                  )
-                })}
+                  )}
+                </div>
               </div>
-            )}
-          </div>
-        )}
+
+              {/* Cash breakdown by method for the day */}
+              {cashFlowResult.txCount > 0 && (
+                <div style={{ marginTop:12, display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
+                  <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'10px 12px' }}>
+                    <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>Cash Sales ({cashFlowResult.cashCount})</div>
+                    <div className="mono" style={{ fontSize:15, fontWeight:800, color:GRN }}>{cur(cashFlowResult.cashSales)}</div>
+                  </div>
+                  <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'10px 12px' }}>
+                    <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', marginBottom:4 }}>Transfer Sales ({cashFlowResult.xferCount})</div>
+                    <div className="mono" style={{ fontSize:15, fontWeight:800, color:BLU }}>{cur(cashFlowResult.xferSales)}</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* ── Revenue vs Expenses chart ── */}
+            {/* ── Revenue vs Expenses chart ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
         <SecTitle T={T}>📊 {L.revenueVsExp}</SecTitle>
         {!multiDay ? (
