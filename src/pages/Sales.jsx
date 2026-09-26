@@ -33,6 +33,30 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const [now,       setNow]       = useState(Date.now())
   const [itemWarn,  setItemWarn]  = useState('')
 
+  // ── Daily cash recording ────────────────────────────────────────────────────
+  const [showCashModal, setShowCashModal] = useState(false)
+  const [cashAmount,    setCashAmount]    = useState('')
+  const [cashNote,      setCashNote]      = useState('')
+  const [cashSaved,     setCashSaved]     = useState(false)
+
+  // ── Save daily cash to localStorage ──────────────────────────────────────
+  const saveDailyCash = () => {
+    if (!cashAmount) return
+    const entry = {
+      date:   todayStr(),
+      actual: parseFloat(cashAmount),
+      note:   cashNote,
+      savedAt: new Date().toISOString(),
+    }
+    const existing = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
+    // Replace today's entry if exists, else add
+    const updated = existing.filter(e => e.date !== todayStr())
+    updated.push(entry)
+    localStorage.setItem('rt_daily_cash', JSON.stringify(updated))
+    setCashSaved(true)
+    setTimeout(() => { setShowCashModal(false); setCashSaved(false); setCashAmount(''); setCashNote('') }, 1200)
+  }
+
   // ── Filters ────────────────────────────────────────────────────────────────
   const [srch,          setSrch]          = useState('')
   const [filterSt,      setFilterSt]      = useState('all')
@@ -246,7 +270,14 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       {/* ── Header ── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20, flexWrap:'wrap', gap:10 }}>
         <h1 className="dm" style={{ fontSize:24, fontWeight:700, color:T.textPrimary }}>{L.sales}</h1>
-        <Btn onClick={() => { setEditSale(null); setForm(mkBlank()); setItemWarn(''); setShow(true) }}>{L.addSale}</Btn>
+        <div style={{ display:'flex', gap:8 }}>
+          <Btn outline color={GRN} icon="dollar" onClick={() => setShowCashModal(true)}>
+            {L.recordCash || 'Record Cash'}
+          </Btn>
+          <Btn onClick={() => { setEditSale(null); setForm(mkBlank()); setItemWarn(''); setShow(true) }}>
+            {L.addSale}
+          </Btn>
+        </div>
       </div>
 
       {/* ── Stats ── */}
@@ -444,6 +475,97 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }} style={{ flex:1, justifyContent:'center' }}>Cancel</Btn>
             <Btn onClick={saveSale} disabled={saving} style={{ flex:2, justifyContent:'center' }}>
               {saving ? 'Saving…' : editSale ? '💾 Save Changes' : '✅ Record Sale'}
+            </Btn>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Daily Cash Recording Modal ── */}
+      {showCashModal && (
+        <Modal title={L.recordCash || 'Record Daily Cash'} onClose={() => { setShowCashModal(false); setCashAmount(''); setCashNote(''); setCashSaved(false) }} T={T}>
+          <p style={{ fontSize:13, color:T.textSecondary, marginBottom:16, lineHeight:1.6 }}>
+            Count your physical cash at end of day and record the total. It will be compared with your calculated sales in Reports.
+          </p>
+
+          {/* Today's calculated sales */}
+          <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
+            <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>Today's Recorded Sales ({todayStr()})</div>
+            <div className="mono" style={{ fontSize:22, fontWeight:800, color:T.accent }}>
+              {cur(sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
+            </div>
+            <div style={{ fontSize:11, color:T.textMuted, marginTop:3 }}>
+              {sales.filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
+            </div>
+          </div>
+
+          <div style={{ display:'grid', gap:12, marginBottom:16 }}>
+            <div>
+              <label style={{ fontSize:11, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.4 }}>
+                {L.actualCashLabel || 'Actual Cash in Hand'}
+              </label>
+              <input
+                type="number"
+                value={cashAmount}
+                onChange={e => setCashAmount(e.target.value)}
+                placeholder="Enter total cash you counted..."
+                style={{ width:'100%', fontSize:20, fontWeight:800, padding:'12px 14px', boxSizing:'border-box',
+                  borderColor: cashAmount ? (
+                    parseFloat(cashAmount) === sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    ? GRN : parseFloat(cashAmount) > sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    ? BLU : RED
+                  ) : T.border }}
+              />
+            </div>
+
+            {/* Live difference preview */}
+            {cashAmount && (() => {
+              const daySales = sales.filter(s => s.date.slice(0,10) === todayStr())
+              const calc     = daySales.reduce((a,s) => a + s.amountPaid, 0)
+              const actual   = parseFloat(cashAmount) || 0
+              const diff     = actual - calc
+              return (
+                <div style={{
+                  borderRadius:10, padding:'12px 14px',
+                  background: diff===0 ? GRN+'18' : diff>0 ? BLU+'18' : RED+'18',
+                  border:`1.5px solid ${diff===0?GRN:diff>0?BLU:RED}55`,
+                  display:'flex', alignItems:'center', gap:12,
+                }}>
+                  <span style={{ fontSize:24 }}>{diff===0 ? '✅' : diff>0 ? '💰' : '⚠️'}</span>
+                  <div>
+                    <div style={{ fontWeight:700, fontSize:14, color:diff===0?GRN:diff>0?BLU:RED }}>
+                      {diff===0
+                        ? 'Perfect match!'
+                        : diff>0
+                          ? `Over by ${cur(diff)}`
+                          : `Short by ${cur(Math.abs(diff))}`}
+                    </div>
+                    <div style={{ fontSize:11, color:T.textMuted, marginTop:2 }}>
+                      Recorded: {cur(calc)} · Actual: {cur(actual)}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            <div>
+              <label style={{ fontSize:11, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.4 }}>
+                Note (optional)
+              </label>
+              <input
+                value={cashNote}
+                onChange={e => setCashNote(e.target.value)}
+                placeholder="e.g. End of day cash count"
+                style={{ width:'100%', fontSize:13, boxSizing:'border-box' }}
+              />
+            </div>
+          </div>
+
+          <div style={{ display:'flex', gap:8 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShowCashModal(false); setCashAmount(''); setCashNote('') }} style={{ flex:1, justifyContent:'center' }}>
+              Cancel
+            </Btn>
+            <Btn onClick={saveDailyCash} disabled={!cashAmount || cashSaved} color={GRN} icon="check" style={{ flex:2, justifyContent:'center' }}>
+              {cashSaved ? '✅ Saved!' : 'Save Cash Record'}
             </Btn>
           </div>
         </Modal>

@@ -88,6 +88,8 @@ export const LANGS = {
     borrowingEntries:'Borrowing', allTimeRevenue:'All Revenue', allTimeExpenses:'All Expenses',
     allTimeProfit:'All Profit', noRecords:'No records yet.',
     // Fix 3 — missing keys added
+    recordCash:'Record Cash',
+    recordCashTitle:'Record Daily Cash',
     outOfStockWarn:'Out of stock! Cannot add this item.',
     duplicateItemWarn:'This product is already in the list.',
     restockingProduct:'Select Product to Restock',
@@ -146,6 +148,8 @@ export const LANGS = {
     borrowingEntries:'ተበዳሪ', allTimeRevenue:'ጠቅላላ ገቢ', allTimeExpenses:'ጠቅላላ ወጪ',
     allTimeProfit:'ጠቅላላ ትርፍ', noRecords:'እስካሁን ምንም የለም።',
     // Fix 3 — Amharic translations
+    recordCash:'ገንዘብ ይመዝግቡ',
+    recordCashTitle:'የዕለቱ ጥሬ ገንዘብ ይመዝግቡ',
     outOfStockWarn:'ክምችት አልቋል! ይህን እቃ ማከል አይቻልም።',
     duplicateItemWarn:'ይህ ምርት ቀድሞ በዝርዝሩ ውስጥ አለ።',
     restockingProduct:'እቃ ዳግም ለመሙላት ምርት ምረጥ',

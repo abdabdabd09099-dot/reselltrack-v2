@@ -21,7 +21,6 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
   // ── Daily cash flow state ──────────────────────────────────────────────────
   const [cashFlowDate,   setCashFlowDate]   = useState(todayStr())
-  const [cashFlowActual, setCashFlowActual] = useState('')
   const [cashFlowResult, setCashFlowResult] = useState(null)
 
   // ── Date range ─────────────────────────────────────────────────────────────
@@ -92,13 +91,16 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const recordCashFlow = () => {
     const daySales   = sales.filter(s => s.date.slice(0,10) === cashFlowDate)
     const calculated = daySales.reduce((a,s) => a + s.amountPaid, 0)
-    const actual     = parseFloat(cashFlowActual) || 0
-    const diff       = actual - calculated
-    const cashSales  = daySales.filter(s => s.paymentMethod==='cash').reduce((a,s) => a + s.amountPaid, 0)
-    const xferSales  = daySales.filter(s => s.paymentMethod==='transfer').reduce((a,s) => a + s.amountPaid, 0)
-    const cashCount  = daySales.filter(s => s.paymentMethod==='cash').length
-    const xferCount  = daySales.filter(s => s.paymentMethod==='transfer').length
-    setCashFlowResult({ calculated, actual, diff, txCount: daySales.length, date: cashFlowDate, cashSales, xferSales, cashCount, xferCount })
+    // Read actual from localStorage (saved via Sales page "Record Cash" button)
+    const saved  = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
+    const entry  = saved.find(e => e.date === cashFlowDate)
+    const actual = entry ? entry.actual : 0
+    const diff   = actual - calculated
+    const cashSales = daySales.filter(s => s.paymentMethod==='cash').reduce((a,s) => a + s.amountPaid, 0)
+    const xferSales = daySales.filter(s => s.paymentMethod==='transfer').reduce((a,s) => a + s.amountPaid, 0)
+    const cashCount = daySales.filter(s => s.paymentMethod==='cash').length
+    const xferCount = daySales.filter(s => s.paymentMethod==='transfer').length
+    setCashFlowResult({ calculated, actual, diff, txCount: daySales.length, date: cashFlowDate, cashSales, xferSales, cashCount, xferCount, hasEntry: !!entry })
   }
 
   const PieCard = ({ title, data, empty, valColor }) => (
@@ -192,32 +194,47 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           ))}
         </div>
 
-        {/* Daily cash recorder */}
+        {/* Saved daily cash entries from Sales page */}
         <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
             <Icon name="dollar" size={14} color={T.accent} strokeWidth={2.5} />
-            <span style={{ fontSize:13, fontWeight:700, color:T.textPrimary }}>Record Actual Cash Collected</span>
+            <span style={{ fontSize:13, fontWeight:700, color:T.textPrimary }}>Daily Cash Records</span>
           </div>
           <p style={{ fontSize:12, color:T.textMuted, marginBottom:14, lineHeight:1.5 }}>
-            Count your physical cash and enter the total below. We'll compare it with your recorded sales automatically.
+            Cash entries recorded from the Sales page. Pick a date to compare with your calculated sales.
           </p>
 
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }} className="g2">
+          {/* Date selector + Compare */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr auto', gap:10, marginBottom:12, alignItems:'flex-end' }}>
             <div>
               <label style={{ fontSize:10, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Date</label>
               <input type="date" value={cashFlowDate} onChange={e => { setCashFlowDate(e.target.value); setCashFlowResult(null) }}
                 style={{ width:'100%', fontSize:13 }} />
             </div>
-            <div>
-              <label style={{ fontSize:10, color:T.textSecondary, display:'block', marginBottom:5, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 }}>Actual Cash in Hand</label>
-              <input type="number" value={cashFlowActual} onChange={e => { setCashFlowActual(e.target.value); setCashFlowResult(null) }}
-                placeholder="Enter total cash counted..." style={{ width:'100%', fontSize:15, fontWeight:700 }} />
-            </div>
+            <Btn onClick={recordCashFlow} icon="check" color={T.accent}>Compare</Btn>
           </div>
 
-          <Btn onClick={recordCashFlow} disabled={!cashFlowActual} icon="check" full>
-            Compare Cash
-          </Btn>
+          {/* Saved entry for selected date */}
+          {(() => {
+            const saved = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
+            const entry = saved.find(e => e.date === cashFlowDate)
+            return entry ? (
+              <div style={{ background:GRN+'12', border:`1px solid ${GRN}44`, borderRadius:9, padding:'10px 14px', marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>
+                <div>
+                  <div style={{ fontSize:10, color:GRN, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:3 }}>Recorded Cash for {entry.date}</div>
+                  <div className="mono" style={{ fontSize:20, fontWeight:800, color:GRN }}>{cur(entry.actual)}</div>
+                  {entry.note && <div style={{ fontSize:11, color:T.textMuted, marginTop:2 }}>📝 {entry.note}</div>}
+                </div>
+                <div style={{ fontSize:10, color:T.textMuted, textAlign:'right' }}>
+                  Saved at {new Date(entry.savedAt).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' })}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:AMB+'12', border:`1px solid ${AMB}33`, borderRadius:9, padding:'10px 14px', marginBottom:12, fontSize:12, color:AMB }}>
+                💡 No cash recorded for <strong>{cashFlowDate}</strong>. Use the <strong>Record Cash</strong> button on the Sales page to add one.
+              </div>
+            )
+          })()}
 
           {/* Result */}
           {cashFlowResult && (
@@ -276,7 +293,12 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
                   </div>
                   {cashFlowResult.txCount === 0 && (
                     <div style={{ marginTop:8, fontSize:12, color:AMB, fontWeight:600 }}>
-                      ⚠️ No sales recorded for this date — make sure you selected the right date.
+                      ⚠️ No sales recorded for this date.
+                    </div>
+                  )}
+                  {!cashFlowResult.hasEntry && (
+                    <div style={{ marginTop:8, fontSize:12, color:AMB, fontWeight:600 }}>
+                      💡 No cash entry for this date — use "Record Cash" on the Sales page first.
                     </div>
                   )}
                 </div>
