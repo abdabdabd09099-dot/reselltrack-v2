@@ -4,14 +4,14 @@
 //  • Sales by product table — units sold, revenue, % of total
 //  • Transaction log — improved with cash column
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Stat, SecTitle, ChartTip, PieLabel, Icon } from '../components/UI.jsx'
+import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn } from '../components/UI.jsx'
 
 export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
   const [period, setPeriod] = useState('daily')
