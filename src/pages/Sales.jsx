@@ -86,13 +86,16 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     customerName:'', contact:'',
     date: todayStr(), time: new Date().toTimeString().slice(0,5),
     items: [{ productId:'', productName:'', qty:1, unitPrice:0, variant:'' }],
-    paymentMethod:'cash', amountPaid:'', dueDate:'', notes:'', sendToLend:true,
+    cashPaid:'', transferPaid:'', dueDate:'', notes:'', sendToLend:true,
   })
   const [form, setForm] = useState(mkBlank())
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
-  const rowTotal = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
-  const rowBal   = Math.max(0, rowTotal - (+form.amountPaid || 0))
+  const rowTotal      = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
+  const rowCashPaid    = +form.cashPaid || 0
+  const rowXferPaid    = +form.transferPaid || 0
+  const rowTotalPaid   = rowCashPaid + rowXferPaid
+  const rowBal         = Math.max(0, rowTotal - rowTotalPaid)
 
   // ── Update item (stock + duplicate checks) ─────────────────────────────────
   const updItem = (idx, key, val) => {
@@ -138,7 +141,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
       items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
-      paymentMethod: s.paymentMethod, amountPaid: s.amountPaid,
+      cashPaid:      s.paymentMethod === 'cash'     ? String(s.amountPaid) : s.paymentMethod === 'split' ? String(s.cashPaid || 0) : '',
+      transferPaid:  s.paymentMethod === 'transfer'  ? String(s.amountPaid) : s.paymentMethod === 'split' ? String(s.transferPaid || 0) : '',
       dueDate:'', notes: s.notes || '', sendToLend: false,
     })
     setShow(true)
@@ -182,8 +186,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     try {
       const dt     = form.date + 'T' + form.time + ':00'
       const total  = validItems.reduce((a,i) => a + i.qty * i.unitPrice, 0)
-      const bal    = Math.max(0, total - (+form.amountPaid || 0))
-      const status = bal === 0 ? 'Paid' : +form.amountPaid > 0 ? 'Partial' : 'Unpaid'
+      const cashPaid    = +form.cashPaid || 0
+      const xferPaid    = +form.transferPaid || 0
+      const totalPaid   = cashPaid + xferPaid
+      const bal         = Math.max(0, total - totalPaid)
+      const payMethod   = cashPaid > 0 && xferPaid > 0 ? 'split' : xferPaid > 0 ? 'transfer' : 'cash'
+      const status      = bal === 0 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid'
 
       if (editSale) {
         for (const oi of editSale.items) {
@@ -202,13 +210,13 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           if (nw)  stock  = Math.max(0, stock - nw.qty)
           return { ...p, stock }
         }))
-        await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: +form.amountPaid||0, balance: bal, payment_method: form.paymentMethod, status, notes: form.notes||null }).eq('id', editSale.id)
+        await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: totalPaid, balance: bal, payment_method: payMethod, status, notes: form.notes||null }).eq('id', editSale.id)
         await sb.from('sale_items').delete().eq('sale_id', editSale.id)
         await sb.from('sale_items').insert(validItems.map(i => ({ sale_id: editSale.id, product_id: i.productId, product_name: i.productName, qty: i.qty, unit_price: i.unitPrice })))
-        setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: +form.amountPaid||0, balance: bal, paymentMethod: form.paymentMethod, status, notes: form.notes } : s))
+        setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, status, notes: form.notes } : s))
         setEditSale(null)
       } else {
-        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: +form.amountPaid||0, balance: bal, paymentMethod: form.paymentMethod, notes: form.notes, status }
+        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, notes: form.notes, status }
         let created
         if (isDemo) {
           created = demoApi.sales.create(sale)
@@ -356,7 +364,18 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <span className="mono" style={{ fontWeight:600, color:T.textPrimary }}>{cur(s.totalAmount)}</span>,
             <span className="mono" style={{ color:GRN }}>{cur(s.amountPaid)}</span>,
             <span className="mono" style={{ color:s.balance>0?RED:T.textMuted }}>{s.balance>0?cur(s.balance):'—'}</span>,
-            <Badge color={s.paymentMethod==='cash'?GRN:BLU}>{s.paymentMethod==='cash'?'💵':'📲'}</Badge>,
+            <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+              {s.paymentMethod==='split' ? (
+                <>
+                  <Badge color={GRN}>💵 {cur(s.cashPaid||0)}</Badge>
+                  <Badge color={BLU}>📲 {cur(s.transferPaid||0)}</Badge>
+                </>
+              ) : (
+                <Badge color={s.paymentMethod==='cash'?GRN:BLU}>
+                  {s.paymentMethod==='cash'?'💵 Cash':'📲 Transfer'}
+                </Badge>
+              )}
+            </div>,
             s.status==='Paid' ? <Badge color={GRN}>✅ {L.paid}</Badge> : s.status==='Partial' ? <Badge color={AMB}>{L.partial}</Badge> : <Badge color={RED}>{L.unpaid}</Badge>,
             <div style={{ display:'flex', flexDirection:'column', gap:5, alignItems:'flex-start' }}>
               {isEditable(s) && (
@@ -436,22 +455,84 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <span style={{ color:T.textSecondary, fontSize:13, fontWeight:600 }}>Total</span>
             <span className="mono" style={{ fontWeight:800, fontSize:20, color:T.accent }}>{cur(rowTotal)}</span>
           </div>
-          {/* Payment */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
-            <div>
-              <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:5 }}>Payment</div>
-              <div style={{ display:'flex', gap:6 }}>
-                {['cash','transfer'].map(m => (
-                  <button key={m} onClick={() => sf('paymentMethod',m)}
-                    style={{ flex:1, padding:'8px 4px', borderRadius:8, border:`2px solid ${form.paymentMethod===m?(m==='cash'?GRN:BLU):T.border}`, background:form.paymentMethod===m?(m==='cash'?GRN+'18':BLU+'18'):'transparent', color:form.paymentMethod===m?(m==='cash'?GRN:BLU):T.textSecondary, fontWeight:700, fontSize:11, cursor:'pointer' }}>
-                    {m==='cash'?'💵 Cash':'📲 Transfer'}
-                  </button>
-                ))}
+          {/* ── Payment — split cash + transfer ── */}
+          <div style={{ marginBottom:10 }}>
+            <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Payment</div>
+
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+              {/* Cash */}
+              <div style={{ background:GRN+'0a', border:`1.5px solid ${rowCashPaid>0?GRN:T.border}`, borderRadius:10, padding:'10px 12px', transition:'border-color .15s' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                  <span style={{ fontSize:14 }}>💵</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:GRN }}>Cash</span>
+                </div>
+                <input
+                  type="number" min="0"
+                  value={form.cashPaid}
+                  onChange={e => { sf('cashPaid', e.target.value) }}
+                  placeholder="0.00"
+                  style={{ fontSize:15, fontWeight:700, padding:'6px 8px', borderColor: rowCashPaid>0 ? GRN : T.border }}
+                />
+                {rowCashPaid > 0 && (
+                  <div style={{ fontSize:10, color:GRN, marginTop:4, fontWeight:600 }}>{cur(rowCashPaid)} cash</div>
+                )}
+              </div>
+
+              {/* Transfer */}
+              <div style={{ background:BLU+'0a', border:`1.5px solid ${rowXferPaid>0?BLU:T.border}`, borderRadius:10, padding:'10px 12px', transition:'border-color .15s' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
+                  <span style={{ fontSize:14 }}>📲</span>
+                  <span style={{ fontSize:11, fontWeight:700, color:BLU }}>Transfer</span>
+                </div>
+                <input
+                  type="number" min="0"
+                  value={form.transferPaid}
+                  onChange={e => { sf('transferPaid', e.target.value) }}
+                  placeholder="0.00"
+                  style={{ fontSize:15, fontWeight:700, padding:'6px 8px', borderColor: rowXferPaid>0 ? BLU : T.border }}
+                />
+                {rowXferPaid > 0 && (
+                  <div style={{ fontSize:10, color:BLU, marginTop:4, fontWeight:600 }}>{cur(rowXferPaid)} transfer</div>
+                )}
               </div>
             </div>
-            <Lbl label={L.amountPaid} T={T}>
-              <input type="number" value={form.amountPaid} onChange={e => sf('amountPaid',e.target.value)} placeholder={rowTotal>0?`Max ${cur(rowTotal)}`:'0.00'} style={{ fontSize:13, padding:'7px 9px' }} />
-            </Lbl>
+
+            {/* Payment summary */}
+            {rowTotalPaid > 0 && (
+              <div style={{ marginTop:8, background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'9px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
+                <div style={{ display:'flex', gap:12 }}>
+                  {rowCashPaid > 0  && <span style={{ fontSize:12, color:GRN, fontWeight:600 }}>💵 {cur(rowCashPaid)}</span>}
+                  {rowXferPaid > 0  && <span style={{ fontSize:12, color:BLU, fontWeight:600 }}>📲 {cur(rowXferPaid)}</span>}
+                </div>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{ fontSize:11, color:T.textMuted }}>Total paid:</span>
+                  <span className="mono" style={{ fontSize:14, fontWeight:800, color: rowTotalPaid >= rowTotal ? GRN : AMB }}>
+                    {cur(rowTotalPaid)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Quick fill buttons */}
+            {rowTotal > 0 && (
+              <div style={{ display:'flex', gap:6, marginTop:6, flexWrap:'wrap' }}>
+                <button onClick={() => setForm(f => ({ ...f, cashPaid: String(rowTotal), transferPaid: '' }))}
+                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${GRN}55`, background:GRN+'12', color:GRN, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  💵 Full cash ({cur(rowTotal)})
+                </button>
+                <button onClick={() => setForm(f => ({ ...f, transferPaid: String(rowTotal), cashPaid: '' }))}
+                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${BLU}55`, background:BLU+'12', color:BLU, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  📲 Full transfer ({cur(rowTotal)})
+                </button>
+                <button onClick={() => {
+                  const half = (rowTotal / 2).toFixed(2)
+                  setForm(f => ({ ...f, cashPaid: half, transferPaid: half }))
+                }}
+                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${AMB}55`, background:AMB+'12', color:AMB, fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  ½ Split ({cur(rowTotal/2)} each)
+                </button>
+              </div>
+            )}
           </div>
           {/* Balance */}
           {!editSale && rowBal > 0 && (
