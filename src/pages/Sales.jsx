@@ -326,7 +326,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:8 }}>
             {[
               { label:'Status', value:filterSt, setter:setFilterSt, opts:[['all','All'],['paid','✅ Paid'],['partial','⚠️ Partial'],['unpaid','🔴 Unpaid']] },
-              { label:'Method', value:filterMethod, setter:setFilterMethod, opts:[['all','All'],['cash','💵 Cash'],['transfer','📲 Transfer']] },
+              { label:'Method', value:filterMethod, setter:setFilterMethod, opts:[['all','All'],['cash','💵 Cash'],['transfer','📲 Transfer'],['split','💵📲 Split']] },
             ].map(f => (
               <div key={f.label}>
                 <label style={{ fontSize:10, color:T.textSecondary, display:'block', marginBottom:3, fontWeight:600, textTransform:'uppercase' }}>{f.label}</label>

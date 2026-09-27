@@ -45,8 +45,17 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   const totalUncol  = filtSales.reduce((a, s) => a + s.balance, 0)
   const lendPend    = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
   const borrPend    = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
-  const cashTotal       = filtSales.filter(s => s.paymentMethod === 'cash').reduce((a, s) => a + s.amountPaid, 0)
-  const xferTotal       = filtSales.filter(s => s.paymentMethod === 'transfer').reduce((a, s) => a + s.amountPaid, 0)
+  // Include split payments in cash/transfer totals
+  const cashTotal = filtSales.reduce((a, s) => {
+    if (s.paymentMethod === 'cash')     return a + s.amountPaid
+    if (s.paymentMethod === 'split')    return a + (s.cashPaid || 0)
+    return a
+  }, 0)
+  const xferTotal = filtSales.reduce((a, s) => {
+    if (s.paymentMethod === 'transfer') return a + s.amountPaid
+    if (s.paymentMethod === 'split')    return a + (s.transferPaid || 0)
+    return a
+  }, 0)
   const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
 
 
@@ -96,10 +105,18 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     const entry  = saved.find(e => e.date === cashFlowDate)
     const actual = entry ? entry.actual : 0
     const diff   = actual - calculated
-    const cashSales = daySales.filter(s => s.paymentMethod==='cash').reduce((a,s) => a + s.amountPaid, 0)
-    const xferSales = daySales.filter(s => s.paymentMethod==='transfer').reduce((a,s) => a + s.amountPaid, 0)
-    const cashCount = daySales.filter(s => s.paymentMethod==='cash').length
-    const xferCount = daySales.filter(s => s.paymentMethod==='transfer').length
+    const cashSales = daySales.reduce((a,s) => {
+      if (s.paymentMethod==='cash')     return a + s.amountPaid
+      if (s.paymentMethod==='split')    return a + (s.cashPaid||0)
+      return a
+    }, 0)
+    const xferSales = daySales.reduce((a,s) => {
+      if (s.paymentMethod==='transfer') return a + s.amountPaid
+      if (s.paymentMethod==='split')    return a + (s.transferPaid||0)
+      return a
+    }, 0)
+    const cashCount = daySales.filter(s => s.paymentMethod==='cash' || s.paymentMethod==='split').length
+    const xferCount = daySales.filter(s => s.paymentMethod==='transfer' || s.paymentMethod==='split').length
     setCashFlowResult({ calculated, actual, diff, txCount: daySales.length, date: cashFlowDate, cashSales, xferSales, cashCount, xferCount, hasEntry: !!entry })
   }
 
@@ -171,7 +188,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
         <SecTitle T={T} right={
           <span style={{ fontSize: 11, color: T.textMuted }}>
-            {filtSales.filter(s=>s.paymentMethod==='cash').length} cash · {filtSales.filter(s=>s.paymentMethod==='transfer').length} transfer
+            {filtSales.filter(s=>s.paymentMethod==='cash').length} cash · {filtSales.filter(s=>s.paymentMethod==='transfer').length} transfer · {filtSales.filter(s=>s.paymentMethod==='split').length} split
           </span>
         }>
           💰 Cash Flow — {range[0] === range[1] ? range[0] : `${range[0]} → ${range[1]}`}
@@ -557,10 +574,21 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
                     {/* Method */}
                     <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: s.paymentMethod === 'cash' ? GRN+'22' : BLU+'22', border: `1px solid ${s.paymentMethod === 'cash' ? GRN : BLU}44`, borderRadius: 6, padding: '3px 7px' }}>
-                        <span style={{ fontSize: 11 }}>{s.paymentMethod === 'cash' ? '💵' : '📲'}</span>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: s.paymentMethod === 'cash' ? GRN : BLU, textTransform: 'capitalize' }}>{s.paymentMethod}</span>
-                      </div>
+                      {s.paymentMethod === 'split' ? (
+                        <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                          <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:GRN+'22', border:`1px solid ${GRN}44`, borderRadius:5, padding:'2px 6px' }}>
+                            <span style={{ fontSize:10 }}>💵</span><span style={{ fontSize:10, fontWeight:600, color:GRN }}>{cur(s.cashPaid||0)}</span>
+                          </div>
+                          <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:BLU+'22', border:`1px solid ${BLU}44`, borderRadius:5, padding:'2px 6px' }}>
+                            <span style={{ fontSize:10 }}>📲</span><span style={{ fontSize:10, fontWeight:600, color:BLU }}>{cur(s.transferPaid||0)}</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div style={{ display:'inline-flex', alignItems:'center', gap:4, background:s.paymentMethod==='cash'?GRN+'22':BLU+'22', border:`1px solid ${s.paymentMethod==='cash'?GRN:BLU}44`, borderRadius:6, padding:'3px 7px' }}>
+                          <span style={{ fontSize:11 }}>{s.paymentMethod==='cash'?'💵':'📲'}</span>
+                          <span style={{ fontSize:10, fontWeight:600, color:s.paymentMethod==='cash'?GRN:BLU, textTransform:'capitalize' }}>{s.paymentMethod}</span>
+                        </div>
+                      )}
                     </td>
 
                     {/* Calculated total */}
@@ -608,7 +636,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
                   </td>
                   <td style={{ padding: '10px 12px' }}>
                     <span style={{ fontSize: 11, color: T.textMuted }}>
-                      {filtSales.filter(s => s.paymentMethod==='cash').length} cash · {filtSales.filter(s => s.paymentMethod==='transfer').length} transfer
+                      {filtSales.filter(s => s.paymentMethod==='cash').length} cash · {filtSales.filter(s => s.paymentMethod==='transfer').length} transfer · {filtSales.filter(s => s.paymentMethod==='split').length} split
                     </span>
                   </td>
                   <td />

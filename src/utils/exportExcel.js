@@ -43,7 +43,9 @@ const buildSalesSheet = (sales, currencySymbol) => {
       Number(s.totalAmount),
       Number(s.amountPaid),
       Number(s.balance),
-      s.paymentMethod,
+      s.paymentMethod === 'split'
+        ? `Split (💵${fmtMoney(s.cashPaid||0, currencySymbol)} + 📲${fmtMoney(s.transferPaid||0, currencySymbol)})`
+        : s.paymentMethod,
       s.status,
       s.notes || '',
     ])
