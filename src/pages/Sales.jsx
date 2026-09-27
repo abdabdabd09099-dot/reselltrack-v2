@@ -86,16 +86,16 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     customerName:'', contact:'',
     date: todayStr(), time: new Date().toTimeString().slice(0,5),
     items: [{ productId:'', productName:'', qty:1, unitPrice:0, variant:'' }],
-    cashPaid:'', transferPaid:'', dueDate:'', notes:'', sendToLend:true,
+    paymentMethod:'cash', amountPaid:'', splitMethod:'transfer', splitAmount:'', dueDate:'', notes:'', sendToLend:true,
   })
   const [form, setForm] = useState(mkBlank())
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
-  const rowTotal      = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
-  const rowCashPaid    = +form.cashPaid || 0
-  const rowXferPaid    = +form.transferPaid || 0
-  const rowTotalPaid   = rowCashPaid + rowXferPaid
-  const rowBal         = Math.max(0, rowTotal - rowTotalPaid)
+  const rowTotal     = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
+  const rowPaid1     = +form.amountPaid  || 0
+  const rowPaid2     = +form.splitAmount || 0
+  const rowTotalPaid = rowPaid1 + rowPaid2
+  const rowBal       = Math.max(0, rowTotal - rowTotalPaid)
 
   // ── Update item (stock + duplicate checks) ─────────────────────────────────
   const updItem = (idx, key, val) => {
@@ -141,8 +141,10 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
       items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
-      cashPaid:      s.paymentMethod === 'cash'     ? String(s.amountPaid) : s.paymentMethod === 'split' ? String(s.cashPaid || 0) : '',
-      transferPaid:  s.paymentMethod === 'transfer'  ? String(s.amountPaid) : s.paymentMethod === 'split' ? String(s.transferPaid || 0) : '',
+      paymentMethod: s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'cash' : 'transfer') : s.paymentMethod,
+      amountPaid:    s.paymentMethod === 'split' ? String(s.cashPaid || s.amountPaid) : String(s.amountPaid),
+      splitMethod:   s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'transfer' : 'cash') : 'transfer',
+      splitAmount:   s.paymentMethod === 'split' ? String(s.transferPaid || s.cashPaid || '') : '',
       dueDate:'', notes: s.notes || '', sendToLend: false,
     })
     setShow(true)
@@ -186,11 +188,14 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     try {
       const dt     = form.date + 'T' + form.time + ':00'
       const total  = validItems.reduce((a,i) => a + i.qty * i.unitPrice, 0)
-      const cashPaid    = +form.cashPaid || 0
-      const xferPaid    = +form.transferPaid || 0
-      const totalPaid   = cashPaid + xferPaid
+      const paid1       = +form.amountPaid  || 0
+      const paid2       = +form.splitAmount || 0
+      const totalPaid   = paid1 + paid2
+      const hasSplit    = paid2 > 0 && form.splitMethod && form.splitMethod !== form.paymentMethod
+      const cashPaid    = form.paymentMethod === 'cash'     ? paid1 : hasSplit && form.splitMethod === 'cash'     ? paid2 : 0
+      const xferPaid    = form.paymentMethod === 'transfer' ? paid1 : hasSplit && form.splitMethod === 'transfer' ? paid2 : 0
       const bal         = Math.max(0, total - totalPaid)
-      const payMethod   = cashPaid > 0 && xferPaid > 0 ? 'split' : xferPaid > 0 ? 'transfer' : 'cash'
+      const payMethod   = hasSplit ? 'split' : form.paymentMethod
       const status      = bal === 0 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid'
 
       if (editSale) {
@@ -455,82 +460,85 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <span style={{ color:T.textSecondary, fontSize:13, fontWeight:600 }}>Total</span>
             <span className="mono" style={{ fontWeight:800, fontSize:20, color:T.accent }}>{cur(rowTotal)}</span>
           </div>
-          {/* ── Payment — split cash + transfer ── */}
+          {/* ── Payment ── */}
           <div style={{ marginBottom:10 }}>
             <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Payment</div>
 
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
-              {/* Cash */}
-              <div style={{ background:GRN+'0a', border:`1.5px solid ${rowCashPaid>0?GRN:T.border}`, borderRadius:10, padding:'10px 12px', transition:'border-color .15s' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
-                  <span style={{ fontSize:14 }}>💵</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:GRN }}>Cash</span>
+            {/* Primary payment method + amount */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+              <div>
+                <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>Method</label>
+                <div style={{ display:'flex', gap:6 }}>
+                  {['cash','transfer'].map(m => (
+                    <button key={m} onClick={() => sf('paymentMethod', m)}
+                      style={{ flex:1, padding:'8px 4px', borderRadius:8, border:`2px solid ${form.paymentMethod===m?(m==='cash'?GRN:BLU):T.border}`, background:form.paymentMethod===m?(m==='cash'?GRN+'18':BLU+'18'):'transparent', color:form.paymentMethod===m?(m==='cash'?GRN:BLU):T.textSecondary, fontWeight:700, fontSize:11, cursor:'pointer', transition:'all .15s' }}>
+                      {m==='cash'?'💵 Cash':'📲 Transfer'}
+                    </button>
+                  ))}
                 </div>
-                <input
-                  type="number" min="0"
-                  value={form.cashPaid}
-                  onChange={e => { sf('cashPaid', e.target.value) }}
-                  placeholder="0.00"
-                  style={{ fontSize:15, fontWeight:700, padding:'6px 8px', borderColor: rowCashPaid>0 ? GRN : T.border }}
-                />
-                {rowCashPaid > 0 && (
-                  <div style={{ fontSize:10, color:GRN, marginTop:4, fontWeight:600 }}>{cur(rowCashPaid)} cash</div>
-                )}
               </div>
-
-              {/* Transfer */}
-              <div style={{ background:BLU+'0a', border:`1.5px solid ${rowXferPaid>0?BLU:T.border}`, borderRadius:10, padding:'10px 12px', transition:'border-color .15s' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:6 }}>
-                  <span style={{ fontSize:14 }}>📲</span>
-                  <span style={{ fontSize:11, fontWeight:700, color:BLU }}>Transfer</span>
-                </div>
-                <input
-                  type="number" min="0"
-                  value={form.transferPaid}
-                  onChange={e => { sf('transferPaid', e.target.value) }}
-                  placeholder="0.00"
-                  style={{ fontSize:15, fontWeight:700, padding:'6px 8px', borderColor: rowXferPaid>0 ? BLU : T.border }}
-                />
-                {rowXferPaid > 0 && (
-                  <div style={{ fontSize:10, color:BLU, marginTop:4, fontWeight:600 }}>{cur(rowXferPaid)} transfer</div>
-                )}
+              <div>
+                <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>Amount Paid</label>
+                <input type="number" value={form.amountPaid}
+                  onChange={e => sf('amountPaid', e.target.value)}
+                  placeholder={rowTotal>0 ? `Max ${cur(rowTotal)}` : '0.00'}
+                  style={{ fontSize:14, fontWeight:600, padding:'8px 10px' }} />
               </div>
             </div>
 
-            {/* Payment summary */}
-            {rowTotalPaid > 0 && (
-              <div style={{ marginTop:8, background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'9px 12px', display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:6 }}>
-                <div style={{ display:'flex', gap:12 }}>
-                  {rowCashPaid > 0  && <span style={{ fontSize:12, color:GRN, fontWeight:600 }}>💵 {cur(rowCashPaid)}</span>}
-                  {rowXferPaid > 0  && <span style={{ fontSize:12, color:BLU, fontWeight:600 }}>📲 {cur(rowXferPaid)}</span>}
+            {/* Remaining after primary payment */}
+            {rowPaid1 > 0 && rowPaid1 < rowTotal && (
+              <div style={{ background: AMB+'0a', border:`1.5px solid ${AMB}44`, borderRadius:10, padding:'12px 14px', marginBottom:6 }}>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:7 }}>
+                    <Icon name="clock" size={13} color={AMB} strokeWidth={2.5} />
+                    <span style={{ fontSize:12, fontWeight:700, color:AMB }}>
+                      Remaining: <span className="mono">{cur(rowTotal - rowPaid1)}</span>
+                    </span>
+                  </div>
+                  <span style={{ fontSize:11, color:T.textMuted }}>Add second payment (optional)</span>
                 </div>
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontSize:11, color:T.textMuted }}>Total paid:</span>
-                  <span className="mono" style={{ fontSize:14, fontWeight:800, color: rowTotalPaid >= rowTotal ? GRN : AMB }}>
-                    {cur(rowTotalPaid)}
-                  </span>
-                </div>
-              </div>
-            )}
 
-            {/* Quick fill buttons */}
-            {rowTotal > 0 && (
-              <div style={{ display:'flex', gap:6, marginTop:6, flexWrap:'wrap' }}>
-                <button onClick={() => setForm(f => ({ ...f, cashPaid: String(rowTotal), transferPaid: '' }))}
-                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${GRN}55`, background:GRN+'12', color:GRN, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                  💵 Full cash ({cur(rowTotal)})
-                </button>
-                <button onClick={() => setForm(f => ({ ...f, transferPaid: String(rowTotal), cashPaid: '' }))}
-                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${BLU}55`, background:BLU+'12', color:BLU, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                  📲 Full transfer ({cur(rowTotal)})
-                </button>
-                <button onClick={() => {
-                  const half = (rowTotal / 2).toFixed(2)
-                  setForm(f => ({ ...f, cashPaid: half, transferPaid: half }))
-                }}
-                  style={{ padding:'4px 10px', borderRadius:6, border:`1px solid ${AMB}55`, background:AMB+'12', color:AMB, fontSize:11, fontWeight:600, cursor:'pointer' }}>
-                  ½ Split ({cur(rowTotal/2)} each)
-                </button>
+                {/* Second payment method + amount */}
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                  <div>
+                    <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Method</label>
+                    <div style={{ display:'flex', gap:6 }}>
+                      {['cash','transfer'].filter(m => m !== form.paymentMethod).map(m => (
+                        <button key={m} onClick={() => sf('splitMethod', m)}
+                          style={{ flex:1, padding:'7px 4px', borderRadius:8, border:`2px solid ${form.splitMethod===m?(m==='cash'?GRN:BLU):T.border}`, background:form.splitMethod===m?(m==='cash'?GRN+'18':BLU+'18'):'transparent', color:form.splitMethod===m?(m==='cash'?GRN:BLU):T.textSecondary, fontWeight:700, fontSize:11, cursor:'pointer' }}>
+                          {m==='cash'?'💵 Cash':'📲 Transfer'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Amount</label>
+                    <div style={{ position:'relative' }}>
+                      <input type="number" value={form.splitAmount}
+                        onChange={e => sf('splitAmount', e.target.value)}
+                        placeholder={cur(rowTotal - rowPaid1)}
+                        style={{ fontSize:13, padding:'7px 9px', borderColor: +form.splitAmount > 0 ? (form.splitMethod==='cash'?GRN:BLU) : T.border }} />
+                      {/* Quick-fill remaining */}
+                      <button onClick={() => sf('splitAmount', String(+(rowTotal - rowPaid1).toFixed(2)))}
+                        style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:AMB+'22', border:'none', borderRadius:5, padding:'2px 6px', fontSize:10, color:AMB, fontWeight:700, cursor:'pointer' }}>
+                        Fill
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {rowPaid2 > 0 && (
+                  <div style={{ marginTop:8, fontSize:12, color:T.textSecondary, display:'flex', gap:16, flexWrap:'wrap' }}>
+                    <span>{form.paymentMethod==='cash'?'💵':'📲'} <strong style={{ color:form.paymentMethod==='cash'?GRN:BLU }}>{cur(rowPaid1)}</strong> now</span>
+                    <span>+</span>
+                    <span>{form.splitMethod==='cash'?'💵':'📲'} <strong style={{ color:form.splitMethod==='cash'?GRN:BLU }}>{cur(rowPaid2)}</strong> {form.splitMethod==='transfer'?'via transfer':'in cash'}</span>
+                    <span style={{ marginLeft:'auto', fontWeight:700, color: rowTotalPaid>=rowTotal ? GRN : AMB }}>
+                      Total: {cur(rowTotalPaid)} {rowTotalPaid>=rowTotal ? '✅' : `(${cur(rowTotal-rowTotalPaid)} left)`}
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>
