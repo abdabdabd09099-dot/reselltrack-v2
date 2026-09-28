@@ -191,11 +191,18 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       const paid1       = +form.amountPaid  || 0
       const paid2       = +form.splitAmount || 0
       const totalPaid   = paid1 + paid2
-      const hasSplit    = paid2 > 0 && form.splitMethod && form.splitMethod !== form.paymentMethod
-      const cashPaid    = form.paymentMethod === 'cash'     ? paid1 : hasSplit && form.splitMethod === 'cash'     ? paid2 : 0
-      const xferPaid    = form.paymentMethod === 'transfer' ? paid1 : hasSplit && form.splitMethod === 'transfer' ? paid2 : 0
+      const sameMethods = form.splitMethod === form.paymentMethod
+      const hasSplit    = paid2 > 0 && form.splitMethod
+      // If same method both times — stays as single method, total combined
+      // If different methods — becomes 'split'
+      const cashPaid    = form.paymentMethod === 'cash'
+        ? (sameMethods ? paid1 + paid2 : paid1)
+        : (!sameMethods && form.splitMethod === 'cash' ? paid2 : 0)
+      const xferPaid    = form.paymentMethod === 'transfer'
+        ? (sameMethods ? paid1 + paid2 : paid1)
+        : (!sameMethods && form.splitMethod === 'transfer' ? paid2 : 0)
       const bal         = Math.max(0, total - totalPaid)
-      const payMethod   = hasSplit ? 'split' : form.paymentMethod
+      const payMethod   = hasSplit && !sameMethods ? 'split' : form.paymentMethod
       const status      = bal === 0 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid'
 
       if (editSale) {
@@ -502,9 +509,9 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 {/* Second payment method + amount */}
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                   <div>
-                    <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Method</label>
+                    <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Method (same OK)</label>
                     <div style={{ display:'flex', gap:6 }}>
-                      {['cash','transfer'].filter(m => m !== form.paymentMethod).map(m => (
+                      {['cash','transfer'].map(m => (
                         <button key={m} onClick={() => sf('splitMethod', m)}
                           style={{ flex:1, padding:'7px 4px', borderRadius:8, border:`2px solid ${form.splitMethod===m?(m==='cash'?GRN:BLU):T.border}`, background:form.splitMethod===m?(m==='cash'?GRN+'18':BLU+'18'):'transparent', color:form.splitMethod===m?(m==='cash'?GRN:BLU):T.textSecondary, fontWeight:700, fontSize:11, cursor:'pointer' }}>
                           {m==='cash'?'💵 Cash':'📲 Transfer'}
@@ -533,7 +540,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   <div style={{ marginTop:8, fontSize:12, color:T.textSecondary, display:'flex', gap:16, flexWrap:'wrap' }}>
                     <span>{form.paymentMethod==='cash'?'💵':'📲'} <strong style={{ color:form.paymentMethod==='cash'?GRN:BLU }}>{cur(rowPaid1)}</strong> now</span>
                     <span>+</span>
-                    <span>{form.splitMethod==='cash'?'💵':'📲'} <strong style={{ color:form.splitMethod==='cash'?GRN:BLU }}>{cur(rowPaid2)}</strong> {form.splitMethod==='transfer'?'via transfer':'in cash'}</span>
+                    <span>{form.splitMethod==='cash'?'💵':'📲'} <strong style={{ color:form.splitMethod==='cash'?GRN:BLU }}>{cur(rowPaid2)}</strong> {form.splitMethod===form.paymentMethod ? 'later (same method)' : form.splitMethod==='transfer'?'via transfer':'in cash'}</span>
                     <span style={{ marginLeft:'auto', fontWeight:700, color: rowTotalPaid>=rowTotal ? GRN : AMB }}>
                       Total: {cur(rowTotalPaid)} {rowTotalPaid>=rowTotal ? '✅' : `(${cur(rowTotal-rowTotalPaid)} left)`}
                     </span>
