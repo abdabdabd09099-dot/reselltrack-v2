@@ -116,7 +116,7 @@ export const apiSales = {
     if (!userId) throw new Error('Not authenticated')
     // Validate status is an allowed value — prevent injection
     const VALID_STATUS   = ['Paid', 'Partial', 'Unpaid']
-    const VALID_METHODS  = ['cash', 'transfer']
+    const VALID_METHODS  = ['cash', 'transfer', 'split']
     const status         = VALID_STATUS.includes(sale.status)  ? sale.status         : 'Unpaid'
     const paymentMethod  = VALID_METHODS.includes(sale.paymentMethod) ? sale.paymentMethod : 'cash'
 

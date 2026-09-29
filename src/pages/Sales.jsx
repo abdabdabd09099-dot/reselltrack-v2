@@ -222,7 +222,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           if (nw)  stock  = Math.max(0, stock - nw.qty)
           return { ...p, stock }
         }))
-        await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: totalPaid, balance: bal, payment_method: payMethod, status, notes: form.notes||null }).eq('id', editSale.id)
+        await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: totalPaid, cash_paid: cashPaid||null, transfer_paid: xferPaid||null, balance: bal, payment_method: payMethod, status, notes: form.notes||null }).eq('id', editSale.id)
         await sb.from('sale_items').delete().eq('sale_id', editSale.id)
         await sb.from('sale_items').insert(validItems.map(i => ({ sale_id: editSale.id, product_id: i.productId, product_name: i.productName, qty: i.qty, unit_price: i.unitPrice })))
         setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, status, notes: form.notes } : s))
@@ -523,11 +523,14 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                     <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Amount</label>
                     <div style={{ position:'relative' }}>
                       <input type="number" value={form.splitAmount}
-                        onChange={e => sf('splitAmount', e.target.value)}
+                        onChange={e => {
+                          sf('splitAmount', e.target.value)
+                          if (+e.target.value > 0) sf('sendToLend', true)
+                        }}
                         placeholder={cur(rowTotal - rowPaid1)}
                         style={{ fontSize:13, padding:'7px 9px', borderColor: +form.splitAmount > 0 ? (form.splitMethod==='cash'?GRN:BLU) : T.border }} />
                       {/* Quick-fill remaining */}
-                      <button onClick={() => sf('splitAmount', String(+(rowTotal - rowPaid1).toFixed(2)))}
+                      <button onClick={() => { sf('splitAmount', String(+(rowTotal - rowPaid1).toFixed(2))); sf('sendToLend', true) }}
                         style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', background:AMB+'22', border:'none', borderRadius:5, padding:'2px 6px', fontSize:10, color:AMB, fontWeight:700, cursor:'pointer' }}>
                         Fill
                       </button>
@@ -549,17 +552,41 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               </div>
             )}
           </div>
-          {/* Balance */}
+          {/* Balance — auto-shown when 2nd payment pending */}
           {!editSale && rowBal > 0 && (
-            <div style={{ background:RED+'0e', border:`1px solid ${RED}44`, borderRadius:10, padding:'9px 12px', marginBottom:10 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:7, flexWrap:'wrap', gap:6 }}>
-                <span style={{ color:RED, fontWeight:700, fontSize:13 }}>Balance: <span className="mono">{cur(rowBal)}</span></span>
-                <label style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, cursor:'pointer' }}>
-                  <input type="checkbox" checked={form.sendToLend} onChange={e => sf('sendToLend',e.target.checked)} />
-                  <span style={{ color:AMB, fontWeight:600 }}>Track as debt</span>
-                </label>
+            <div style={{ background:rowPaid2>0?AMB+'12':RED+'0e', border:`1px solid ${rowPaid2>0?AMB:RED}44`, borderRadius:10, padding:'12px 14px', marginBottom:10 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8, flexWrap:'wrap', gap:6 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                  <Icon name={rowPaid2>0?'clock':'alert'} size={14} color={rowPaid2>0?AMB:RED} strokeWidth={2.5} />
+                  <span style={{ color:rowPaid2>0?AMB:RED, fontWeight:700, fontSize:13 }}>
+                    {rowPaid2>0?'Pending payment:':'Balance due:'}{' '}
+                    <span className="mono">{cur(rowBal)}</span>
+                  </span>
+                </div>
+                {rowPaid2>0 && (
+                  <span style={{ background:AMB+'22', border:`1px solid ${AMB}44`, borderRadius:6, padding:'3px 8px', fontSize:11, color:AMB, fontWeight:700 }}>
+                    ⏳ Will be marked Partial
+                  </span>
+                )}
               </div>
-              {form.sendToLend && <Lbl label="Due Date" T={T}><input type="date" value={form.dueDate} onChange={e => sf('dueDate',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>}
+              {rowPaid2>0 && (
+                <div style={{ background:T.bg, borderRadius:8, padding:'8px 12px', marginBottom:10, fontSize:12, color:T.textSecondary, lineHeight:1.6 }}>
+                  Customer owes <strong style={{ color:AMB }}>{cur(rowBal)}</strong> via{' '}
+                  <strong style={{ color:form.splitMethod==='cash'?GRN:BLU }}>
+                    {form.splitMethod==='cash'?'💵 cash':'📲 transfer'}
+                  </strong>.
+                  Sale stays <strong style={{ color:AMB }}>Partial</strong> until fully paid.
+                </div>
+              )}
+              <label style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, cursor:'pointer', marginBottom:form.sendToLend?10:0 }}>
+                <input type="checkbox" checked={form.sendToLend} onChange={e => sf('sendToLend',e.target.checked)} style={{ width:16, height:16, accentColor:AMB }} />
+                <span style={{ color:AMB, fontWeight:600 }}>Add to lending tracker (monitor this debt)</span>
+              </label>
+              {form.sendToLend && (
+                <Lbl label="Due Date" T={T}>
+                  <input type="date" value={form.dueDate} onChange={e => sf('dueDate',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} />
+                </Lbl>
+              )}
             </div>
           )}
           {/* Notes */}
