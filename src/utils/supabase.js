@@ -96,9 +96,9 @@ export const apiSales = {
       date:          s.sale_date,
       totalAmount:   safeNum(s.total_amount),
       amountPaid:    safeNum(s.amount_paid),
-      actualCash:    s.actual_cash != null ? safeNum(s.actual_cash) : null,
-      cashPaid:      s.cash_paid != null ? safeNum(s.cash_paid) : null,
-      transferPaid:  s.transfer_paid != null ? safeNum(s.transfer_paid) : null,
+      cashPaid:      s.cash_paid      != null ? safeNum(s.cash_paid)      : null,
+      transferPaid:  s.transfer_paid  != null ? safeNum(s.transfer_paid)  : null,
+      actualCash:    s.actual_cash    != null ? safeNum(s.actual_cash)    : null,
       balance:       safeNum(s.balance),
       paymentMethod: s.payment_method,
       status:        s.status,
@@ -108,6 +108,7 @@ export const apiSales = {
         productName: i.product_name,
         qty:         safeNum(i.qty, 1),
         unitPrice:   safeNum(i.unit_price),
+        variant:     i.variant || '',
       })),
     }))
   },
@@ -143,6 +144,7 @@ export const apiSales = {
       product_name: safeStr(i.productName),
       qty:          safeNum(i.qty, 1),
       unit_price:   safeNum(i.unitPrice),
+      variant:      i.variant || null,
     }))
     const { error: iErr } = await sb.from('sale_items').insert(items)
     if (iErr) throw iErr
