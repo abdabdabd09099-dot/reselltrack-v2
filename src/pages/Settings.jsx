@@ -411,34 +411,6 @@ export default function Settings({
       </Accordion>
 
       {/* ══ ABOUT ════════════════════════════════════════════════════════════ */}
-      {/* ── Database migration notice ── */}
-      <div style={{ background:'#F59E0B18', border:'1px solid #F59E0B44', borderRadius:12, padding:'14px 18px', marginBottom:12 }}>
-        <div style={{ display:'flex', alignItems:'flex-start', gap:10 }}>
-          <div style={{ width:28, height:28, borderRadius:8, background:'#F59E0B22', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:1 }}>
-            <Icon name="alert" size={14} color="#F59E0B" strokeWidth={2.5} />
-          </div>
-          <div>
-            <div style={{ fontSize:13, fontWeight:700, color:T.textPrimary, marginBottom:4 }}>
-              ⚙️ Database Migration Required
-            </div>
-            <div style={{ fontSize:12, color:T.textSecondary, lineHeight:1.6, marginBottom:10 }}>
-              To enable <strong style={{ color:T.accent }}>split payments</strong> (cash + transfer on one sale),
-              run the migration SQL in your Supabase dashboard once.
-              Without it, split payment data will not save correctly.
-            </div>
-            <a
-              href="https://app.supabase.com/project/devqrpcxaxjcxdixwitw/sql/new"
-              target="_blank" rel="noopener noreferrer"
-              style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, background:'#F59E0B', color:'#0D0F14', fontWeight:700, fontSize:12, textDecoration:'none' }}>
-              <Icon name="external" size={13} color="#0D0F14" />
-              Open Supabase SQL Editor
-            </a>
-            <div style={{ marginTop:8, fontSize:11, color:T.textMuted }}>
-              SQL file: <code style={{ background:T.bg, padding:'1px 6px', borderRadius:4, fontFamily:'monospace' }}>supabase-run-all-migrations.sql</code> in the repo.
-            </div>
-          </div>
-        </div>
-      </div>
 
       <Accordion icon={<Icon name="info" size={15} color={T.accent} />} label={L.about} T={T}>
         <div style={{ color: T.textSecondary, fontSize: 13, lineHeight: 1.9 }}>

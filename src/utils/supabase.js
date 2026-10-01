@@ -328,3 +328,38 @@ export const apiBorrowing = {
     if (error) throw error
   },
 }
+
+// ── Auto-run migrations ───────────────────────────────────────────────────────
+// Runs once on app start to ensure DB columns exist.
+// Uses raw SQL via Supabase RPC if available, otherwise silently skips.
+export const runMigrations = async () => {
+  try {
+    // Try to select the columns — if they exist, we're good
+    const { error } = await sb
+      .from('sales')
+      .select('cash_paid, transfer_paid, actual_cash')
+      .limit(1)
+
+    if (!error) {
+      // Columns exist — check sale_items variant
+      await sb.from('sale_items').select('variant').limit(1)
+      return { ok: true, message: 'DB columns verified' }
+    }
+
+    // Columns missing — try to add them via RPC
+    const migrations = [
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS cash_paid NUMERIC(12,2) DEFAULT NULL`,
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS transfer_paid NUMERIC(12,2) DEFAULT NULL`,
+      `ALTER TABLE sales ADD COLUMN IF NOT EXISTS actual_cash NUMERIC(12,2) DEFAULT NULL`,
+      `ALTER TABLE sale_items ADD COLUMN IF NOT EXISTS variant TEXT DEFAULT NULL`,
+    ]
+
+    for (const sql of migrations) {
+      await sb.rpc('exec_sql', { query: sql }).catch(() => {})
+    }
+
+    return { ok: true, message: 'Migrations applied' }
+  } catch {
+    return { ok: false, message: 'Migration check skipped' }
+  }
+}

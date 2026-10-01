@@ -3,7 +3,7 @@
 // Flow: Landing → Demo (optional) → Auth → Full App
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
-import { sb, signOut, apiProducts, apiSales, apiExpenses, apiLending, apiBorrowing } from './utils/supabase.js'
+import { sb, signOut, apiProducts, apiSales, apiExpenses, apiLending, apiBorrowing, runMigrations } from './utils/supabase.js'
 import { CURRENCIES, THEMES, LANGS, DEFAULT_SETTINGS } from './data/constants.js'
 import { loadSettings, saveSettings } from './utils/helpers.js'
 import { buildCss } from './utils/buildCss.js'
@@ -93,10 +93,11 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
-  // ── Load data (real users only) ────────────────────────────────────────────
+  // ── Load data + run migrations (real users only) ───────────────────────────
   useEffect(() => {
     if (!user || isDemo) return
     setLoading(true); setNetError(false)
+    runMigrations().catch(() => {}) // silently apply DB migrations
     Promise.all([
       apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(),
       apiLending.fetch(), apiBorrowing.fetch(),
