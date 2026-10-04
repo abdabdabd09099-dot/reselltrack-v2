@@ -25,6 +25,7 @@ import PriceCalculator from './pages/PriceCalculator.jsx'
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
 import { Icon, Logo, SessionWarning } from './components/UI.jsx'
 import InstallPrompt    from './components/InstallPrompt.jsx'
+import { ToastProvider } from './utils/toast.jsx'
 import DemoLimitPrompt  from './components/DemoLimitPrompt.jsx'
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -191,10 +192,9 @@ export default function App() {
         onRetry={() => {
           setNetError(false)
           setLoading(true)
-          Promise.all([apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(), apiLending.fetch(), apiBorrowing.fetch()])
-            .then(([p, s, e, l, b]) => { setProducts(p); setSales(s); setExpenses(e); setLending(l); setBorrowing(b) })
-            .catch(() => setNetError(true))
-            .finally(() => setLoading(false))
+          Promise.all([apiProducts.fetch(),apiSales.fetch(),apiExpenses.fetch(),apiLending.fetch(),apiBorrowing.fetch()])
+            .then(([p,s,e,l,b])=>{setProducts(p);setSales(s);setExpenses(e);setLending(l);setBorrowing(b)})
+            .catch(()=>setNetError(true)).finally(()=>setLoading(false))
         }}
       />
     )
@@ -224,7 +224,7 @@ export default function App() {
             <img src="/icons/icon-72.png" alt="ResellTrack" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0 }} />
             {(!slim || isTablet) && (
               <span className="dm" style={{ fontWeight: 700, fontSize: 14, color: T.accent, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {isDemo ? 'Demo Mode' : biz}
+                {isDemo ? '👀 Demo' : biz}
               </span>
             )}
             {!isTablet && <button onClick={() => setSlim(s => !s)} style={{ background: 'none', border: 'none', color: T.textMuted, fontSize: 15, marginLeft: 'auto', flexShrink: 0, cursor: 'pointer' }}>{slim ? '▶' : '◀'}</button>}
@@ -263,14 +263,14 @@ export default function App() {
               <>
                 {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8 }}>Browsing in demo</div>}
                 <button onClick={goSignUp} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', borderRadius: 8, background: '#F5A623', border: 'none', color: '#0D0F14', fontSize: 12, fontWeight: 700, cursor: 'pointer', justifyContent: 'center' }}>
-                  <span>🔓</span>{(!slim || isTablet) && <span>Create Free Account</span>}
+                  {(!slim || isTablet) && <span>Create Free Account</span>}
                 </button>
               </>
             ) : (
               <>
                 {(!slim || isTablet) && <div style={{ fontSize: 11, color: T.textMuted, marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.email}</div>}
                 <button onClick={handleSignOut} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 10px', borderRadius: 8, background: 'transparent', border: `1px solid ${T.border}`, color: T.textSecondary, fontSize: 12, fontWeight: 500, cursor: 'pointer' }}>
-                  <span>🚪</span>{(!slim || isTablet) && <span>Sign Out</span>}
+                  {(!slim || isTablet) && <span>Sign Out</span>}
                 </button>
               </>
             )}
@@ -284,7 +284,7 @@ export default function App() {
               <button onClick={() => setMOpen(true)} style={{ background: 'none', border: 'none', color: T.textSecondary, fontSize: 24, padding: '4px 8px', cursor: 'pointer' }}>☰</button>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <img src="/icons/icon-72.png" alt="" style={{ width: 24, height: 24, borderRadius: 6 }} />
-                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{isDemo ? 'Demo Mode' : biz}</span>
+                <span className="dm" style={{ fontWeight: 700, color: T.accent, fontSize: 15 }}>{isDemo ? '👀 Demo' : biz}</span>
               </div>
               <span style={{ fontSize: 12, color: T.textMuted }}>{curObj.symbol} {curObj.code}</span>
             </div>
@@ -326,6 +326,7 @@ export default function App() {
         </nav>
 
         <InstallPrompt T={T} />
+        <ToastProvider T={T} />
       </div>
     </>
   )

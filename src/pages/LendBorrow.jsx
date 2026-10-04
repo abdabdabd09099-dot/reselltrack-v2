@@ -1,4 +1,5 @@
 // ─── LendBorrow.jsx ───────────────────────────────────────────────────────────
+import { toast } from '../utils/toast.jsx'
 // Two-tab ledger: money others owe you (Lending) and money you owe (Borrowing).
 // Entries linked from sales appear automatically.
 // To modify: add interest tracking, add reminder notifications, add notes.
@@ -39,7 +40,7 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
         setBorrowing(bs => [{ ...entry, id: c.id }, ...bs])
       }
       setShow(false); setForm(blank)
-    } catch (e) { alert('Save failed: ' + e.message) }
+    } catch (e) { toast.error('Save failed: ' + e.message) }
     setSaving(false)
   }
 
@@ -53,16 +54,17 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
         isDemo ? demoApi.borrowing.settle(id) : await apiBorrowing.settle(id)
         setBorrowing(bs => bs.map(b => b.id === id ? { ...b, status: 'Settled' } : b))
       }
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const del = async (id, t) => {
-    if (!confirm('Delete?')) return
+    const _ok = await toast.confirm('Delete?')
+    if (!_ok) return
     try {
       if (t === 'lending') { isDemo ? demoApi.lending.delete(id) : await apiLending.delete(id); setLending(ls => ls.filter(l => l.id !== id)) }
       else { isDemo ? demoApi.borrowing.delete(id) : await apiBorrowing.delete(id); setBorrowing(bs => bs.filter(b => b.id !== id)) }
-    } catch (e) { alert('Error: ' + e.message) }
+    } catch (e) { toast.error(e.message) }
   }
 
   const lp   = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)

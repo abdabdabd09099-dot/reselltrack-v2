@@ -7,8 +7,14 @@
 import * as XLSX from 'xlsx'
 
 // ── Format helpers ────────────────────────────────────────────────────────────
-const fmtDate  = iso => iso ? new Date(iso).toLocaleDateString('en-GB') : ''
-const fmtTime  = iso => iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''
+const fmtDate  = (iso) => {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleDateString('en-GB') } catch { return '' }
+}
+const fmtTime  = (iso) => {
+  if (!iso) return ''
+  try { return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute:'2-digit' }) } catch { return '' }
+}
 const fmtMoney = (n, sym = '₱') => sym + Number(n || 0).toFixed(2)
 
 // ── Apply column widths ───────────────────────────────────────────────────────
@@ -237,7 +243,7 @@ const buildSummarySheet = (data, currencySymbol) => {
 }
 
 // ── Main export function ──────────────────────────────────────────────────────
-export const exportToExcel = ({ sales, products, expenses, lending, borrowing, settings, currencySymbol = '₱' }) => {
+export const exportToExcel = ({ sales = [], products = [], expenses = [], lending = [], borrowing = [], settings = {}, currencySymbol = '₱' }) => {
   const wb = XLSX.utils.book_new()
 
   // Sheet order

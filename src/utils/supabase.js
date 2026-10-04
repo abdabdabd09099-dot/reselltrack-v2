@@ -24,14 +24,17 @@ const safeNum = (v, min = 0) => {
   const n = Number(v)
   return (!isFinite(n) || n < min) ? min : n
 }
-const safeStr = (v) => (v == null ? null : String(v).trim() || null)
+const safeStr = (v, max=500) => {
+  if (v == null) return null
+  return String(v).trim().replace(/<[^>]*>/g,'').replace(/javascript:/gi,'').slice(0,max) || null
+}
 
 // ── Products ──────────────────────────────────────────────────────────────────
 export const apiProducts = {
   fetch: async () => {
     const { data, error } = await sb
       .from('products').select('*').order('created_at', { ascending: false })
-    if (error) throw error
+    throwIfError(error)
     return data.map(p => ({
       id: p.id, sku: p.sku, name: p.name,
       category: p.category, description: p.description,
@@ -54,7 +57,7 @@ export const apiProducts = {
       sell_price:  safeNum(p.sellPrice, 0.01),
       stock:       safeNum(p.stock),
     }).select().single()
-    if (error) throw error
+    throwIfError(error)
     return {
       id: data.id, sku: data.sku, name: data.name,
       category: data.category, description: data.description,
@@ -74,12 +77,12 @@ export const apiProducts = {
       sell_price:  safeNum(p.sellPrice, 0.01),
       stock:       safeNum(p.stock),
     }).eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 
   delete: async (id) => {
     const { error } = await sb.from('products').delete().eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 }
 
@@ -88,7 +91,7 @@ export const apiSales = {
   fetch: async () => {
     const { data, error } = await sb
       .from('sales').select('*, sale_items(*)').order('sale_date', { ascending: false })
-    if (error) throw error
+    throwIfError(error)
     return data.map(s => ({
       id:            s.id,
       customerName:  s.customer_name,
@@ -136,7 +139,7 @@ export const apiSales = {
       status,
       notes:          safeStr(sale.notes),
     }).select().single()
-    if (sErr) throw sErr
+    throwIfError(sErr, 'sales')
 
     const items = sale.items.map(i => ({
       sale_id:      saleRow.id,
@@ -147,18 +150,18 @@ export const apiSales = {
       variant:      i.variant || null,
     }))
     const { error: iErr } = await sb.from('sale_items').insert(items)
-    if (iErr) throw iErr
+    throwIfError(iErr, 'sale_items')
     return saleRow
   },
 
   markPaid: async (id) => {
     const { data: s, error: sErr } = await sb
       .from('sales').select('total_amount').eq('id', id).single()
-    if (sErr) throw sErr
+    throwIfError(sErr, 'sales')
     const { error } = await sb.from('sales').update({
       status: 'Paid', balance: 0, amount_paid: s.total_amount,
     }).eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 }
 
@@ -167,7 +170,7 @@ export const apiExpenses = {
   fetch: async () => {
     const { data, error } = await sb
       .from('expenses').select('*').order('expense_date', { ascending: false })
-    if (error) throw error
+    throwIfError(error)
     return data.map(e => ({
       id:          e.id,
       description: e.description,
@@ -188,7 +191,7 @@ export const apiExpenses = {
       expense_date: e.date,
       notes:        safeStr(e.notes),
     }).select().single()
-    if (error) throw error
+    throwIfError(error)
     return {
       id:          data.id,
       description: data.description,
@@ -201,7 +204,7 @@ export const apiExpenses = {
 
   delete: async (id) => {
     const { error } = await sb.from('expenses').delete().eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 }
 
@@ -210,7 +213,7 @@ export const apiLending = {
   fetch: async () => {
     const { data, error } = await sb
       .from('lending').select('*').order('lend_date', { ascending: false })
-    if (error) throw error
+    throwIfError(error)
     return data.map(l => ({
       id:         l.id,
       personName: l.person_name,
@@ -241,7 +244,7 @@ export const apiLending = {
       source:      VALID_SOURCE.includes(l.source) ? l.source : 'manual',
       sale_id:     l.saleId   || null,
     }).select().single()
-    if (error) throw error
+    throwIfError(error)
     return {
       id:         data.id,
       personName: data.person_name,
@@ -258,17 +261,17 @@ export const apiLending = {
 
   settle: async (id) => {
     const { error } = await sb.from('lending').update({ status: 'Settled' }).eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 
   settleBySale: async (saleId) => {
     const { error } = await sb.from('lending').update({ status: 'Settled' }).eq('sale_id', saleId)
-    if (error) throw error
+    throwIfError(error)
   },
 
   delete: async (id) => {
     const { error } = await sb.from('lending').delete().eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 }
 
@@ -277,7 +280,7 @@ export const apiBorrowing = {
   fetch: async () => {
     const { data, error } = await sb
       .from('borrowing').select('*').order('borrow_date', { ascending: false })
-    if (error) throw error
+    throwIfError(error)
     return data.map(b => ({
       id:         b.id,
       personName: b.person_name,
@@ -304,7 +307,7 @@ export const apiBorrowing = {
       notes:       safeStr(b.notes),
       status:      VALID_STATUS.includes(b.status) ? b.status : 'Pending',
     }).select().single()
-    if (error) throw error
+    throwIfError(error)
     return {
       id:         data.id,
       personName: data.person_name,
@@ -320,12 +323,12 @@ export const apiBorrowing = {
 
   settle: async (id) => {
     const { error } = await sb.from('borrowing').update({ status: 'Settled' }).eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 
   delete: async (id) => {
     const { error } = await sb.from('borrowing').delete().eq('id', id)
-    if (error) throw error
+    throwIfError(error)
   },
 }
 
@@ -362,4 +365,19 @@ export const runMigrations = async () => {
   } catch {
     return { ok: false, message: 'Migration check skipped' }
   }
+}// ── Typed API error ───────────────────────────────────────────────────────────
+export class ApiError extends Error {
+  constructor(message, code, table) {
+    super(message)
+    this.name   = 'ApiError'
+    this.code   = code
+    this.table  = table
+  }
 }
+
+// ── Throw helper ──────────────────────────────────────────────────────────────
+const throwIfError = (error, table) => {
+  if (error) throw new ApiError(error.message, error.code, table)
+}
+
+

@@ -8,6 +8,7 @@ import { saveOffline } from '../utils/offlineQueue.js'
 import { RED, AMB, BLU, PUR, GRN, EXP_CATS } from '../data/constants.js'
 import { todayStr, fmtD, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
+import { toast } from '../utils/toast.jsx'
 
 const Lbl = Field
 
@@ -69,9 +70,9 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const saveExp = async () => {
-    if (!form.desc)   return alert('Description is required.')
-    if (!form.amount) return alert('Amount is required.')
-    if (isRestocking && !form.restockProductId) return alert('Select a product to restock.')
+    if (!form.desc)   return toast.error('Description is required.')
+    if (!form.amount) return toast.error('Amount is required.')
+    if (isRestocking && !form.restockProductId) return toast.error('Select a product to restock.')
     setSaving(true)
     try {
       const payload = { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes }
@@ -80,7 +81,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
         created = demoApi.expenses.create(payload)
       } else if (!navigator.onLine) {
         created = await saveOffline('expenses', { ...payload, userId })
-        alert('📡 Offline. Expense saved and will sync when reconnected.')
+        toast.error('📡 Offline. Expense saved and will sync when reconnected.')
       } else {
         created = await apiExpenses.create(payload, userId)
       }
@@ -95,16 +96,17 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       }
       setExpenses(es => [created, ...es])
       setShow(false); setForm(blank)
-    } catch(e) { alert('Save failed: ' + e.message) }
+    } catch(e) { toast.error('Save failed: ' + e.message) }
     setSaving(false)
   }
 
   const del = async id => {
-    if (!confirm('Delete this expense?')) return
+    const _ok = await toast.confirm('Delete this expense?')
+    if (!_ok) return
     try {
       isDemo ? demoApi.expenses.delete(id) : await apiExpenses.delete(id)
       setExpenses(es => es.filter(e => e.id !== id))
-    } catch(e) { alert('Delete failed: ' + e.message) }
+    } catch(e) { toast.error('Delete failed: ' + e.message) }
   }
 
   const todayTot = expenses.filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)

@@ -4,6 +4,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
 import { countPending, syncToSupabase } from '../utils/offlineQueue.js'
+import { toast } from '../utils/toast.jsx'
 import { Icon } from './UI.jsx'
 
 const CSS = `
@@ -45,12 +46,17 @@ export default function SyncBadge({ userId, onSynced, T }) {
     setSyncing(true)
     try {
       const result = await syncToSupabase(userId)
-      setCount(await countPending())
+      const pending = await countPending()
+      setCount(pending)
       setLastSync(new Date())
       if (result.synced > 0) {
         onSynced?.(result)
+        toast.success(`✅ ${result.synced} record${result.synced !== 1 ? 's' : ''} synced to cloud`)
         setShowDone(true)
         setTimeout(() => setShowDone(false), 3000)
+      }
+      if (result.failed > 0) {
+        toast.warn(`⚠️ ${result.failed} record${result.failed !== 1 ? 's' : ''} failed to sync`)
       }
     } catch {}
     setSyncing(false)

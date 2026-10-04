@@ -4,6 +4,8 @@ import { saveOffline } from '../utils/offlineQueue.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
+import { toast } from '../utils/toast.jsx'
+import { dailyCash } from '../utils/dailyCash.js'
 
 const Lbl = Field
 const EDIT_WINDOW_MS = 2 * 60 * 60 * 1000
@@ -39,7 +41,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const [cashNote,      setCashNote]      = useState('')
   const [cashSaved,     setCashSaved]     = useState(false)
 
-  // ── Save daily cash to localStorage ──────────────────────────────────────
+  // ── Save daily cash entry ──────────────────────────────────────────────────
   const saveDailyCash = () => {
     if (!cashAmount) return
     const entry = {
@@ -48,11 +50,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       note:   cashNote,
       savedAt: new Date().toISOString(),
     }
-    const existing = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
-    // Replace today's entry if exists, else add
-    const updated = existing.filter(e => e.date !== todayStr())
-    updated.push(entry)
-    localStorage.setItem('rt_daily_cash', JSON.stringify(updated))
+    dailyCash.save(todayStr(), cashAmount, cashNote)
     setCashSaved(true)
     setTimeout(() => { setShowCashModal(false); setCashSaved(false); setCashAmount(''); setCashNote('') }, 1200)
   }
@@ -152,7 +150,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
   // ── Delete sale ────────────────────────────────────────────────────────────
   const deleteSale = async s => {
-    if (!confirm(`Delete sale to ${s.customerName}?\nStock will be restored. This cannot be undone.`)) return
+    const ok = await toast.confirm(`Delete sale to ${s.customerName}?\nStock will be restored. This cannot be undone.`)
+    if (!ok) return
     try {
       if (isDemo) {
         setSales(ss => ss.filter(x => x.id !== s.id))
@@ -170,19 +169,19 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         setSales(ss => ss.filter(x => x.id !== s.id))
         setLending(ls => ls.filter(l => l.saleId !== s.id))
       }
-    } catch(e) { alert('Delete failed: ' + e.message) }
+    } catch(e) { toast.error('Delete failed: ' + e.message) }
   }
 
   // ── Save sale ──────────────────────────────────────────────────────────────
   const saveSale = async () => {
-    if (!form.customerName) return alert('Customer name is required.')
+    if (!form.customerName) return toast.error('Customer name is required.')
     const validItems = form.items.filter(i => i.productId)
-    if (!validItems.length) return alert('Add at least one product.')
+    if (!validItems.length) return toast.error('Add at least one product.')
     for (const item of validItems) {
       const p = products.find(p => p.id === item.productId)
       if (!p) continue
       const alreadyHeld = editSale ? (editSale.items.find(oi => oi.productId === item.productId)?.qty || 0) : 0
-      if (item.qty > p.stock + alreadyHeld) return alert(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
+      if (item.qty > p.stock + alreadyHeld) return toast.error(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
     }
     setSaving(true)
     try {
@@ -235,7 +234,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           if (!created) { onDemoLimit?.(); setSaving(false); return }
         } else if (!navigator.onLine) {
           created = await saveOffline('sales', { ...sale, userId })
-          alert('📡 Offline. Sale saved and will sync when reconnected.')
+          toast.info('📡 Offline — sale saved locally and will sync when reconnected.')
         } else {
           created = await apiSales.create(sale, userId)
         }
@@ -252,7 +251,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         }
       }
       setShow(false); setForm(mkBlank()); setItemWarn('')
-    } catch(e) { alert('Save failed: ' + e.message) }
+    } catch(e) { toast.error('Save failed: ' + e.message) }
     setSaving(false)
   }
 
@@ -265,7 +264,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         await apiLending.settleBySale(id).catch(() => {})
         setLending(ls => ls.map(l => l.saleId === id ? { ...l, status:'Settled' } : l))
       }
-    } catch(e) { alert('Error: ' + e.message) }
+    } catch(e) { toast.error(e.message) }
   }
 
   // ── Filters ────────────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import { sb } from '../utils/supabase.js'
 import { CURRENCIES, THEMES, LANGS, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, saveSettings } from '../utils/helpers.js'
 import { exportToExcel, exportSalesLog } from '../utils/exportExcel.js'
+import { toast } from '../utils/toast.jsx'
 import { checkRateLimit } from '../utils/security.js'
 import { Btn, Field, Accordion, Icon } from '../components/UI.jsx'
 

@@ -14,6 +14,7 @@
 import { useState } from 'react'
 import { signIn, signUp, sb } from '../utils/supabase.js'
 import { checkRateLimit, resetRateLimit } from '../utils/security.js'
+import { toast } from '../utils/toast.jsx'
 import { RED, GRN, AMB } from '../data/constants.js'
 import { buildCss } from '../utils/buildCss.js'
 
@@ -153,7 +154,7 @@ export default function AuthScreen({ T }) {
         resetRateLimit()
         setInfo('✉️ Check your email to confirm your account, then sign in.')
       }
-    } catch (err) { setError(err.message) }
+    } catch (err) { setError(err.message); toast.error(err.message) }
     setLoading(false)
   }
 
@@ -163,7 +164,7 @@ export default function AuthScreen({ T }) {
     try {
       await sendResetEmail(email)
       setInfo('✉️ Password reset email sent! Check your inbox.')
-    } catch (err) { setError(err.message) }
+    } catch (err) { setError(err.message); toast.error(err.message) }
   }
 
   // ── Google OAuth ───────────────────────────────────────────────────────────
@@ -173,7 +174,7 @@ export default function AuthScreen({ T }) {
       await signInWithGoogle()
       // Page will redirect — no further action needed
     } catch (err) {
-      setError(err.message)
+      setError(err.message); toast.error(err.message)
       setGLoading(false)
     }
   }

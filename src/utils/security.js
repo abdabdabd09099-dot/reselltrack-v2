@@ -9,8 +9,9 @@ import { sb } from './supabase.js'
 
 // ── 1. Session timeout ────────────────────────────────────────────────────────
 // Auto signs out after IDLE_MS of no interaction.
-const IDLE_MS    = 30 * 60 * 1000   // 30 minutes
-const WARN_MS    = 2  * 60 * 1000   // warn 2 minutes before
+export const IDLE_MS    = 30 * 60 * 1000   // 30 minutes
+export const WARN_BEFORE  = 2  * 60 * 1000    // warn 2 min before
+const WARN_MS    = WARN_BEFORE
 let   idleTimer  = null
 let   warnTimer  = null
 let   onWarnCb   = null
@@ -49,13 +50,12 @@ const authAttempts  = []
 
 export const checkRateLimit = () => {
   const now  = Date.now()
-  // Remove attempts older than the window
   while (authAttempts.length && authAttempts[0] < now - AUTH_WINDOW) authAttempts.shift()
   if (authAttempts.length >= AUTH_MAX) {
     const waitSec = Math.ceil((authAttempts[0] + AUTH_WINDOW - now) / 1000)
     const mins    = Math.floor(waitSec / 60)
     const secs    = waitSec % 60
-    throw new Error(`Too many attempts. Try again in ${mins}m ${secs}s.`)
+    throw new Error(`Too many sign-in attempts. Try again in ${mins}m ${secs}s.`)
   }
   authAttempts.push(now)
 }
@@ -125,6 +125,7 @@ export const injectCSP = () => {
     "img-src 'self' data: blob: https:",
     "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
     "frame-ancestors 'none'",
+    "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
   ].join('; ')

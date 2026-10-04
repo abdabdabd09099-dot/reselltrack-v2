@@ -1,4 +1,5 @@
 // ─── Products.jsx ─────────────────────────────────────────────────────────────
+import { toast } from '../utils/toast.jsx'
 // Product catalog — add, edit, delete products. Tracks stock, buy/sell price.
 // To modify: add more fields, change SKU format, add image upload.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,15 +47,16 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
         setProducts(ps => [created, ...ps])
       }
       setShow(false)
-    } catch (e) { alert('Save failed: ' + e.message) }
+    } catch (e) { toast.error('Save failed: ' + e.message) }
     setSaving(false)
   }
 
   // ── Delete ─────────────────────────────────────────────────────────────────
   const delProd = async id => {
-    if (!confirm('Delete this product?')) return
+    const _ok = await toast.confirm('Delete this product?')
+    if (!_ok) return
     try { isDemo ? demoApi.products.delete(id) : await apiProducts.delete(id); setProducts(ps => ps.filter(p => p.id !== id)) }
-    catch (e) { alert('Delete failed: ' + e.message) }
+    catch (e) { toast.error('Delete failed: ' + e.message) }
   }
 
   const list     = products.filter(p =>

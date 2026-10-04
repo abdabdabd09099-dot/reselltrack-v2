@@ -4,7 +4,7 @@
 //  • Sales by product table — units sold, revenue, % of total
 //  • Transaction log — improved with cash column
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
@@ -12,6 +12,7 @@ import {
 import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn } from '../components/UI.jsx'
+import { dailyCash } from '../utils/dailyCash.js'
 
 export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
   const [period, setPeriod] = useState('daily')
@@ -60,22 +61,20 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
 
 
-  // ── Products performance table ─────────────────────────────────────────────
-  const prodStats = {}
-  filtSales.forEach(s => {
-    s.items.forEach(item => {
-      if (!prodStats[item.productName]) {
-        prodStats[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
-      }
-      prodStats[item.productName].units   += item.qty
-      prodStats[item.productName].revenue += item.qty * item.unitPrice
-      prodStats[item.productName].txCount += 1
-    })
-  })
-  const prodList = Object.values(prodStats).sort((a, b) => b.revenue - a.revenue)
+  // ── Products performance — memoised ───────────────────────────────────────
+  const prodList = useMemo(() => {
+    const map = {}
+    filtSales.forEach(s => s.items.forEach(item => {
+      if (!map[item.productName]) map[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
+      map[item.productName].units   += item.qty
+      map[item.productName].revenue += item.qty * item.unitPrice
+      map[item.productName].txCount += 1
+    }))
+    return Object.values(map).sort((a, b) => b.revenue - a.revenue)
+  }, [filtSales])
 
   // ── Chart series ───────────────────────────────────────────────────────────
-  const buildSeries = () => {
+  const { series, multiDay } = useMemo(() => {
     const days = []; const start = new Date(range[0]); const end = new Date(range[1])
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const ds  = d.toISOString().slice(0, 10)
@@ -83,25 +82,26 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
       const exp = expenses.filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0)
       days.push({ date: fmtShort(ds), Revenue: rev, Expenses: exp, Profit: rev - exp })
     }
-    return days
-  }
-  const series   = buildSeries()
-  const multiDay = series.length > 1
+    return { series: days, multiDay: days.length > 1 }
+  }, [sales, expenses, range[0], range[1]])
 
   // ── Pie data ───────────────────────────────────────────────────────────────
-  const prodPie  = prodList.slice(0, 7).map(p => ({ name: p.name, value: p.revenue }))
-  const expCatMap = {}
-  filtExp.forEach(e => { const k = e.category || 'Others'; expCatMap[k] = (expCatMap[k] || 0) + e.amount })
-  const expPie  = Object.entries(expCatMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
-  const payPie  = [{ name: 'Cash', value: cashTotal }, { name: 'Transfer', value: xferTotal }].filter(p => p.value > 0)
+  const { prodPie, expPie, payPie } = useMemo(() => {
+    const prodPie   = prodList.slice(0, 7).map(p => ({ name: p.name, value: p.revenue }))
+    const expCatMap = {}
+    filtExp.forEach(e => { const k = e.category || 'Others'; expCatMap[k] = (expCatMap[k] || 0) + e.amount })
+    const expPie  = Object.entries(expCatMap).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }))
+    const payPie  = [{ name: 'Cash', value: cashTotal }, { name: 'Transfer', value: xferTotal }].filter(p => p.value > 0)
+    return { prodPie, expPie, payPie }
+  }, [prodList, filtExp, cashTotal, xferTotal])
   const tipStyle = { background: T.surfaceHigh, border: `1px solid ${T.border}`, borderRadius: 8, color: T.textPrimary }
 
   // ── Record and compare daily cash flow ────────────────────────────────────
   const recordCashFlow = () => {
     const daySales   = sales.filter(s => s.date.slice(0,10) === cashFlowDate)
     const calculated = daySales.reduce((a,s) => a + s.amountPaid, 0)
-    // Read actual from localStorage (saved via Sales page "Record Cash" button)
-    const saved  = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
+    // Read actual cash from dailyCash utility (saved via Sales page 'Record Cash' button)
+    const saved  = dailyCash.getAll()
     const entry  = saved.find(e => e.date === cashFlowDate)
     const actual = entry ? entry.actual : 0
     const diff   = actual - calculated
@@ -233,7 +233,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
           {/* Saved entry for selected date */}
           {(() => {
-            const saved = JSON.parse(localStorage.getItem('rt_daily_cash') || '[]')
+            const saved = dailyCash.getAll()
             const entry = saved.find(e => e.date === cashFlowDate)
             return entry ? (
               <div style={{ background:GRN+'12', border:`1px solid ${GRN}44`, borderRadius:9, padding:'10px 14px', marginBottom:12, display:'flex', justifyContent:'space-between', alignItems:'center', flexWrap:'wrap', gap:8 }}>

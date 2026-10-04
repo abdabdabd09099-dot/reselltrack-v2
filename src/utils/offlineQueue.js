@@ -13,6 +13,7 @@ const STORES     = ['sales', 'products', 'expenses', 'lending', 'borrowing']
 // ── Open IndexedDB ────────────────────────────────────────────────────────────
 let _db = null
 export const openDB = () => new Promise((resolve, reject) => {
+  if (!('indexedDB' in window)) return reject(new Error('IndexedDB not supported'))
   if (_db) return resolve(_db)
   const req = indexedDB.open(DB_NAME, DB_VERSION)
   req.onupgradeneeded = e => {
@@ -204,10 +205,16 @@ export const syncToSupabase = async (userId, callbacks = {}) => {
 
 // ── Listen for online event and auto-sync ─────────────────────────────────────
 export const startAutoSync = (userId, onSync) => {
+  let isSyncing = false
   const handler = async () => {
-    if (!userId) return
-    const result = await syncToSupabase(userId)
-    if (result.synced > 0) onSync?.(result)
+    if (!userId || isSyncing) return
+    isSyncing = true
+    try {
+      const result = await syncToSupabase(userId)
+      if (result.synced > 0) onSync?.(result)
+    } finally {
+      isSyncing = false
+    }
   }
   window.addEventListener('online', handler)
   return () => window.removeEventListener('online', handler)
