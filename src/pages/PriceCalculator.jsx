@@ -64,6 +64,14 @@ const NumInput = ({ value, onChange, placeholder, prefix, suffix, T }) => (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ── Shared style factories ──────────────────────────────────────────────────
+const cardStyle  = T => ({ background:T.surface, border:`1px solid ${T.border}`, borderRadius:14, padding:18 })
+const labelStyle = T => ({ fontSize:10, color:T.textSecondary, display:'block', marginBottom:4, fontWeight:700, textTransform:'uppercase', letterSpacing:.5 })
+const monoStyle  = (color,size=20) => ({ fontFamily:'JetBrains Mono,monospace', fontWeight:800, color, fontSize:size, letterSpacing:'-0.5px' })
+const tileStyle  = (color) => ({ background:color+'12', border:`1.5px solid ${color}44`, borderRadius:12, padding:'12px 14px', flex:1 })
+const tabActiveStyle  = (T,active) => ({ display:'flex', alignItems:'center', gap:7, padding:'10px 14px', borderRadius:10, background:active?T.accent+'22':'transparent', border:`1.5px solid ${active?T.accent:T.border}`, color:active?T.accent:T.textSecondary, fontWeight:active?700:500, fontSize:13, cursor:'pointer', transition:'all .15s', whiteSpace:'nowrap' })
+
 export default function PriceCalculator({ T, cur, products }) {
   const [tab, setTab] = useState('sell')
 

@@ -3,7 +3,7 @@ import { toast } from '../utils/toast.jsx'
 // Product catalog — add, edit, delete products. Tracks stock, buy/sell price.
 // To modify: add more fields, change SKU format, add image upload.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { apiProducts } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'

@@ -7,32 +7,37 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } fro
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Stat, SecTitle, ChartTip } from '../components/UI.jsx'
+import { useMemo } from 'react'
 
 export default function Dashboard({ products, sales, expenses, lending, borrowing, T, L, cur }) {
-  const td          = todayStr()
-  const [wd, wd2]   = thisWeekRange()
-  const [md]        = thisMonthRange()
-
-  // ── Stat calculations ──────────────────────────────────────────────────────
-  const todayRev  = sales.filter(s => s.date.slice(0, 10) === td).reduce((a, s) => a + s.amountPaid, 0)
-  const todayExp  = expenses.filter(e => e.date === td).reduce((a, e) => a + e.amount, 0)
-  const profit    = todayRev - todayExp
-  const uncol     = lending.filter(l => l.status === 'Pending' && l.source === 'sale').reduce((a, l) => a + l.amount, 0)
-  const weekRev   = sales.filter(s => inRange(s.date, [wd, wd2])).reduce((a, s) => a + s.amountPaid, 0)
-  const monthRev  = sales.filter(s => s.date.slice(0, 7) === md.slice(0, 7)).reduce((a, s) => a + s.amountPaid, 0)
-
-  // ── Last 7 days chart data ─────────────────────────────────────────────────
-  const last7 = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - 6 + i)
-    const ds = d.toISOString().slice(0, 10)
-    return {
-      day:      d.toLocaleDateString('en-GB', { weekday: 'short' }),
-      Revenue:  sales.filter(s => s.date.slice(0, 10) === ds).reduce((a, s) => a + s.amountPaid, 0),
-      Expenses: expenses.filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0),
-    }
-  })
-
-  const recent  = [...sales].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5)
+  const { td, todayRev, todayExp, profit, uncol, weekRev, monthRev, last7, recent,
+          lowStock, outOfStock, pendingLend, pendingBorr } = useMemo(() => {
+    const td       = todayStr()
+    const [wd,wd2] = thisWeekRange()
+    const [md]     = thisMonthRange()
+    const todayRev = sales.filter(s => s.date.slice(0,10)===td).reduce((a,s)=>a+s.amountPaid,0)
+    const todayExp = expenses.filter(e => e.date===td).reduce((a,e)=>a+e.amount,0)
+    const profit   = todayRev - todayExp
+    const uncol    = lending.filter(l=>l.status==='Pending'&&l.source==='sale').reduce((a,l)=>a+l.amount,0)
+    const weekRev  = sales.filter(s=>inRange(s.date,[wd,wd2])).reduce((a,s)=>a+s.amountPaid,0)
+    const monthRev = sales.filter(s=>s.date.slice(0,7)===md.slice(0,7)).reduce((a,s)=>a+s.amountPaid,0)
+    const last7    = Array.from({ length: 7 }, (_,i) => {
+      const d  = new Date(); d.setDate(d.getDate()-6+i)
+      const ds = d.toISOString().slice(0,10)
+      return {
+        day:      d.toLocaleDateString('en-GB',{weekday:'short'}),
+        Revenue:  sales.filter(s=>s.date.slice(0,10)===ds).reduce((a,s)=>a+s.amountPaid,0),
+        Expenses: expenses.filter(e=>e.date===ds).reduce((a,e)=>a+e.amount,0),
+      }
+    })
+    const recent      = [...sales].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,5)
+    const lowStock    = products.filter(p=>p.stock<=3&&p.stock>0)
+    const outOfStock  = products.filter(p=>p.stock===0)
+    const pendingLend = lending.filter(l=>l.status==='Pending').reduce((a,l)=>a+l.amount,0)
+    const pendingBorr = borrowing.filter(b=>b.status==='Pending').reduce((a,b)=>a+b.amount,0)
+    return { td, todayRev, todayExp, profit, uncol, weekRev, monthRev, last7, recent,
+             lowStock, outOfStock, pendingLend, pendingBorr }
+  }, [sales, expenses, products, lending, borrowing])
   const plend   = lending.filter(l => l.status === 'Pending').slice(0, 4)
   const pborr   = borrowing.filter(b => b.status === 'Pending').slice(0, 4)
   const lowStk  = products.filter(p => p.stock <= 3 && p.stock > 0)

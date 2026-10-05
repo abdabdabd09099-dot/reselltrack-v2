@@ -4,7 +4,7 @@ import { toast } from '../utils/toast.jsx'
 // Entries linked from sales appear automatically.
 // To modify: add interest tracking, add reminder notifications, add notes.
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { apiLending, apiBorrowing } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD } from '../utils/helpers.js'
