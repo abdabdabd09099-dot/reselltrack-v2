@@ -200,16 +200,14 @@ Field.displayName = 'Field'
 export const Modal = ({ title, onClose, children, wide, T }) => {
   const firstFocusRef = useRef(null)
 
-  // Trap focus + close on Escape
   useEffect(() => {
     const prev = document.activeElement
-    firstFocusRef.current?.focus()
-    const handler = (e) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', handler)
-    // Prevent body scroll
+    setTimeout(() => firstFocusRef.current?.focus(), 50)
+    const onKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
-      document.removeEventListener('keydown', handler)
+      document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
       prev?.focus()
     }
@@ -217,57 +215,57 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
+      role="dialog" aria-modal="true" aria-label={title}
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 200,
-        background: '#000000cc', backdropFilter: 'blur(3px)',
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'flex-end',
+        background: '#000000bb', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       }}
     >
       <div
         onClick={e => e.stopPropagation()}
         style={{
-          background: T.surface, width: '100%',
+          background: T.surface,
+          width: '100%',
           maxWidth: wide ? 720 : 560,
-          height: '100dvh',
-          display: 'flex', flexDirection: 'column',
-          animation: 'slideUpSheet .22s cubic-bezier(.32,1,.25,1) both',
+          height: '96dvh',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          borderRadius: '20px 20px 0 0',
+          boxShadow: '0 -8px 48px #00000055',
+          animation: 'slideUpSheet .28s cubic-bezier(.32,1,.25,1) both',
         }}
       >
-        {/* Header */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '16px 16px 12px', borderBottom: `1px solid ${T.border}`,
-          flexShrink: 0, background: T.surface,
-          paddingTop: 'max(16px, env(safe-area-inset-top))',
-        }}>
-          <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary }}>{title}</span>
+        {/* Drag handle */}
+        <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: T.border }} />
+        </div>
+
+        {/* Fixed header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 16px 14px', borderBottom: `1px solid ${T.border}`, flexShrink: 0 }}>
+          <span className="dm" style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary, letterSpacing: '-0.3px' }}>
+            {title}
+          </span>
           <button
-            ref={firstFocusRef}
-            onClick={onClose}
-            aria-label="Close"
-            style={{
-              background: T.surfaceHigh, border: 'none', borderRadius: 8,
-              width: 36, height: 36,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', flexShrink: 0,
-            }}
+            ref={firstFocusRef} onClick={onClose} aria-label="Close"
+            style={{ background: T.surfaceHigh, border: `1px solid ${T.border}`, borderRadius: 10, width: 36, height: 36, minWidth: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
           >
             <Icon name="close" size={16} color={T.textSecondary} />
           </button>
         </div>
 
-        {/* Scrollable body */}
+        {/* Scrollable body — flex:1 + minHeight:0 is mandatory for scroll to work in flex column */}
         <div style={{
-          flex: 1, overflowY: 'auto',
+          flex: '1 1 0',
+          minHeight: 0,
+          overflowY: 'auto',
+          overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
-          padding: '14px 16px',
-          paddingBottom: 'max(32px, env(safe-area-inset-bottom))',
+          padding: '16px 16px',
+          paddingBottom: 'max(48px, calc(env(safe-area-inset-bottom) + 24px))',
         }}>
           {children}
         </div>

@@ -421,7 +421,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <Lbl label={L.time} T={T}><input type="time" value={form.time} onChange={e => sf('time',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
           </div>
           {/* Customer */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+          <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
             <Lbl label={L.customerName+' *'} T={T}><input value={form.customerName} onChange={e => sf('customerName',e.target.value)} placeholder="Customer name" style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
             <Lbl label={L.contact} T={T}><input value={form.contact} onChange={e => sf('contact',e.target.value)} placeholder="Phone" style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
           </div>
@@ -438,7 +438,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   {products.map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
                 </select>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 32px', gap:6, alignItems:'flex-end' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 72px 60px 30px', gap:6, alignItems:'flex-end' }}>
                 <div>
                   <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>Variant</label>
                   <input value={item.variant||''} onChange={e => updItem(idx,'variant',e.target.value)} placeholder="Size, colour..." style={{ fontSize:12, padding:'6px 8px' }} />
@@ -471,7 +471,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Payment</div>
 
             {/* Primary payment method + amount */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
               <div>
                 <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>Method</label>
                 <div style={{ display:'flex', gap:6 }}>
@@ -506,7 +506,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 </div>
 
                 {/* Second payment method + amount */}
-                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                   <div>
                     <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Method (same OK)</label>
                     <div style={{ display:'flex', gap:6 }}>
