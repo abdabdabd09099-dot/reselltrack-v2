@@ -8,8 +8,7 @@ import { useState, useMemo } from 'react'
 import { apiLending, apiBorrowing } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat } from '../components/UI.jsx'
-import { Tbl } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, Divider } from '../components/UI.jsx'
 
 const Lbl = Field
 

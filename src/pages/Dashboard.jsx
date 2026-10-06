@@ -6,7 +6,7 @@
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Stat, SecTitle, ChartTip } from '../components/UI.jsx'
+import { Badge, Stat, SecTitle, ChartTip, Empty, AlertBanner, ProgressBar, Icon } from '../components/UI.jsx'
 import { useMemo } from 'react'
 
 export default function Dashboard({ products, sales, expenses, lending, borrowing, T, L, cur }) {

@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn } from '../components/UI.jsx'
+import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn, Empty, AlertBanner, ProgressBar, Tabs } from '../components/UI.jsx'
 import { dailyCash } from '../utils/dailyCash.js'
 
 export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
@@ -155,14 +155,16 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
       {/* ── Period selector ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 18, marginBottom: 16 }}>
-        <div style={{ display: 'flex', marginBottom: 14, background: T.bg, borderRadius: 8, overflow: 'hidden', width: 'fit-content', border: `1px solid ${T.border}` }}>
-          {[[L.daily, 'daily'], [L.weekly, 'weekly'], [L.monthly, 'monthly']].map(([lbl, p]) => (
-            <button key={p} onClick={() => setPeriod(p)}
-              style={{ padding: '9px 20px', background: period === p ? T.accent : 'transparent', color: period === p ? '#fff' : T.textSecondary, fontWeight: 600, border: 'none', fontSize: 13, minWidth: 80, cursor: 'pointer' }}>
-              {lbl}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          active={period}
+          onChange={setPeriod}
+          T={T}
+          tabs={[
+            { id:'daily',   label: L.daily   },
+            { id:'weekly',  label: L.weekly  },
+            { id:'monthly', label: L.monthly },
+          ]}
+        />
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ color: T.textSecondary, fontSize: 13 }}>{L.period}:</span>
           {period === 'daily'   && <input type="date"  value={cDate}  onChange={e => setCDate(e.target.value)}  style={{ width: 180 }} />}

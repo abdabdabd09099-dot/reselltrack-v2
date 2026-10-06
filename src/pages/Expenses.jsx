@@ -7,13 +7,13 @@ import { apiExpenses, apiProducts } from '../utils/supabase.js'
 import { saveOffline } from '../utils/offlineQueue.js'
 import { RED, AMB, BLU, PUR, GRN, EXP_CATS } from '../data/constants.js'
 import { todayStr, fmtD, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, Skeleton, ProgressBar, Tabs, SecTitle } from '../components/UI.jsx'
 import { toast } from '../utils/toast.jsx'
 
 const Lbl = Field
 
 // ── Divider with label ────────────────────────────────────────────────────────
-const Divider = ({ label, T }) => (
+const SectionDivider = ({ label, T }) => (
   <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 2px' }}>
     <div style={{ flex:1, height:1, background:T.border }} />
     <span style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>{label}</span>
@@ -189,7 +189,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
                     <InfoTile label="Sell Price" value={cur(selectedProduct.sellPrice)}       color={GRN} T={T} />
                   </div>
 
-                  <Divider label="Restock details" T={T} />
+                  <SectionDivider label="Restock details" T={T} />
 
                   {/* Qty + Unit Price side by side */}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:10, marginBottom:10 }}>
@@ -205,7 +205,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
                     </Lbl>
                   </div>
 
-                  <Divider label="Total expense" T={T} />
+                  <SectionDivider label="Total expense" T={T} />
 
                   {/* Total Expenses — editable, auto-calc from qty × price */}
                   <div style={{ marginTop:10 }}>
