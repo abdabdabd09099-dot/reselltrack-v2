@@ -206,9 +206,11 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
     const onKey = (e) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
+    document.body.classList.add('modal-open')
     return () => {
       document.removeEventListener('keydown', onKey)
       document.body.style.overflow = ''
+      document.body.classList.remove('modal-open')
       prev?.focus()
     }
   }, [onClose])
@@ -218,7 +220,7 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
       role="dialog" aria-modal="true" aria-label={title}
       onClick={onClose}
       style={{
-        position: 'fixed', inset: 0, zIndex: 200,
+        position: 'fixed', inset: 0, zIndex: 9999,
         background: '#000000bb', backdropFilter: 'blur(4px)',
         display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       }}
@@ -229,13 +231,15 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
           background: T.surface,
           width: '100%',
           maxWidth: wide ? 720 : 560,
-          height: '96dvh',
+          height: 'calc(100dvh - env(safe-area-inset-top,0px))',
+          maxHeight: '100dvh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',
           borderRadius: '20px 20px 0 0',
           boxShadow: '0 -8px 48px #00000055',
           animation: 'slideUpSheet .28s cubic-bezier(.32,1,.25,1) both',
+          willChange: 'transform',
         }}
       >
         {/* Drag handle */}
@@ -260,12 +264,12 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
         <div style={{
           flex: '1 1 0',
           minHeight: 0,
-          overflowY: 'auto',
+          overflowY: 'scroll',
           overflowX: 'hidden',
           WebkitOverflowScrolling: 'touch',
           overscrollBehavior: 'contain',
           padding: '16px 16px',
-          paddingBottom: 'max(48px, calc(env(safe-area-inset-bottom) + 24px))',
+          paddingBottom: 'max(80px, calc(env(safe-area-inset-bottom) + 64px))',
         }}>
           {children}
         </div>

@@ -40,6 +40,7 @@ export const buildCss = T => `
   @media(max-width:600px){
     .stat-grid{grid-template-columns:1fr 1fr}
     .content{padding:12px 12px 78px}
+    .modal-open .bottom-nav{display:none!important}
     .bottom-nav{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:48;background:${T.surface};border-top:1px solid ${T.border};padding-bottom:env(safe-area-inset-bottom)}
     .bottom-nav button{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px 2px;background:none;border:none;border-radius:0;color:${T.textMuted};font-size:10px}
     .bottom-nav button.on{color:${T.accent}}

@@ -416,7 +416,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             </div>
           )}
           {/* Date + Time */}
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+          <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <Lbl label={L.date} T={T}><input type="date" value={form.date} onChange={e => sf('date',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
             <Lbl label={L.time} T={T}><input type="time" value={form.time} onChange={e => sf('time',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
           </div>
@@ -438,7 +438,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   {products.map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
                 </select>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 72px 60px 30px', gap:6, alignItems:'flex-end' }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 72px 60px 30px', gap:6, alignItems:'flex-end', marginTop:6 }}>
                 <div>
                   <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>Variant</label>
                   <input value={item.variant||''} onChange={e => updItem(idx,'variant',e.target.value)} placeholder="Size, colour..." style={{ fontSize:12, padding:'6px 8px' }} />
@@ -593,10 +593,10 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <textarea value={form.notes} onChange={e => sf('notes',e.target.value)} rows={2} placeholder="Any notes..." style={{ fontSize:13, padding:'7px 9px', resize:'none' }} />
           </Lbl>
           {/* Buttons */}
-          <div style={{ display:'flex', gap:8, marginTop:14 }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }} style={{ flex:1, justifyContent:'center' }}>Cancel</Btn>
-            <Btn onClick={saveSale} disabled={saving} style={{ flex:2, justifyContent:'center' }}>
-              {saving ? 'Saving…' : editSale ? '💾 Save Changes' : '✅ Record Sale'}
+          <div style={{ display:'flex', gap:10, marginTop:20 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }} style={{ flex:1, justifyContent:'center', minHeight:50 }}>Cancel</Btn>
+            <Btn onClick={saveSale} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:50, fontSize:15 }}>
+              {!saving && (editSale ? '💾 Save Changes' : '✅ Record Sale')}
             </Btn>
           </div>
         </Modal>
