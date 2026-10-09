@@ -197,7 +197,7 @@ Field.displayName = 'Field'
 // MODAL — full-screen sheet on mobile, centred dialog on desktop
 // Traps focus, closes on Escape, prevents body scroll
 // ─────────────────────────────────────────────────────────────────────────────
-export const Modal = ({ title, onClose, children, wide, T }) => {
+export const Modal = ({ title, onClose, children, footer, wide, T }) => {
   const bodyRef = useRef(null)
 
   useEffect(() => {
@@ -220,7 +220,7 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
         background: T.surface,
       }}
     >
-      {/* Fixed header at the very top */}
+      {/* ── Fixed header ── */}
       <div style={{
         display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px",
@@ -244,7 +244,7 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
         </button>
       </div>
 
-      {/* Scrollable body — flex:1 + minHeight:0 is mandatory */}
+      {/* ── Scrollable body — grows to fill space between header and footer ── */}
       <div ref={bodyRef} style={{
         flex: "1 1 0",
         minHeight: 0,
@@ -253,10 +253,25 @@ export const Modal = ({ title, onClose, children, wide, T }) => {
         WebkitOverflowScrolling: "touch",
         overscrollBehavior: "contain",
         padding: "16px",
-        paddingBottom: "max(100px, calc(env(safe-area-inset-bottom) + 80px))",
+        /* Extra bottom padding so last item isn't hidden behind footer */
+        paddingBottom: footer ? "8px" : "max(100px, calc(env(safe-area-inset-bottom) + 80px))",
       }}>
         {children}
       </div>
+
+      {/* ── Sticky footer — always visible, never scrolls away ── */}
+      {footer && (
+        <div style={{
+          flexShrink: 0,
+          padding: "12px 16px",
+          paddingBottom: "max(20px, calc(env(safe-area-inset-bottom) + 12px))",
+          borderTop: `1px solid ${T.border}`,
+          background: T.surface,
+          boxShadow: "0 -4px 16px #00000022",
+        }}>
+          {footer}
+        </div>
+      )}
     </div>
   )
 }

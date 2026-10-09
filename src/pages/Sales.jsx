@@ -409,7 +409,24 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       {/* ── Sale modal ── */}
       {show && (
-        <Modal title={editSale ? '✏️ Edit Sale' : L.recordNewSale} onClose={() => { setShow(false); setEditSale(null); setItemWarn('') }} wide T={T}>
+        <Modal
+          title={editSale ? '✏️ Edit Sale' : L.recordNewSale}
+          onClose={() => { setShow(false); setEditSale(null); setItemWarn('') }}
+          wide T={T}
+          footer={
+            <div style={{ display:'flex', gap:10 }}>
+              <Btn outline color={T.textSecondary}
+                onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }}
+                style={{ flex:1, justifyContent:'center', minHeight:52 }}>
+                Cancel
+              </Btn>
+              <Btn onClick={saveSale} disabled={saving} loading={saving}
+                style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15, fontWeight:700 }}>
+                {!saving && (editSale ? '💾 Save Changes' : '✅ Record Sale')}
+              </Btn>
+            </div>
+          }
+        >
           {editSale && (
             <div style={{ background:AMB+'22', border:`1px solid ${AMB}44`, borderRadius:8, padding:'8px 12px', marginBottom:10, fontSize:12, color:AMB }}>
               ⚠️ Editing sale — stock will be recalculated.
@@ -592,13 +609,6 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           <Lbl label={L.notes+' (optional)'} T={T}>
             <textarea value={form.notes} onChange={e => sf('notes',e.target.value)} rows={2} placeholder="Any notes..." style={{ fontSize:13, padding:'7px 9px', resize:'none' }} />
           </Lbl>
-          {/* Buttons */}
-          <div style={{ display:'flex', gap:10, marginTop:20 }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }} style={{ flex:1, justifyContent:'center', minHeight:50 }}>Cancel</Btn>
-            <Btn onClick={saveSale} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:50, fontSize:15 }}>
-              {!saving && (editSale ? '💾 Save Changes' : '✅ Record Sale')}
-            </Btn>
-          </div>
         </Modal>
       )}
 
