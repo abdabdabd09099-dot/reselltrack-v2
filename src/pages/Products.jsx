@@ -119,7 +119,16 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
 
       {/* ── Add / Edit modal ── */}
       {show && (
-        <Modal title={editId ? L.editProduct : L.addNewProduct} onClose={() => setShow(false)} T={T}>
+        <Modal title={editId ? L.editProduct : L.addNewProduct} onClose={() => setShow(false)} T={T}
+          footer={
+            <div style={{ display:'flex', gap:10 }}>
+              <Btn outline color={T.textSecondary} onClick={() => setShow(false)} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
+              <Btn onClick={saveProduct} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
+                {!saving && (editId ? '💾 Save Changes' : '✅ Add Product')}
+              </Btn>
+            </div>
+          }
+        >
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="g2">
             <Lbl label={L.productName + ' *'} col="1/-1" T={T}>
               <input value={form.name} onChange={e => sf('name', e.target.value)} />

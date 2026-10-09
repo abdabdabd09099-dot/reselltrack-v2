@@ -145,7 +145,16 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
 
       {/* ── Add Expense Modal ── */}
       {show && (
-        <Modal title={L.addExpenseTitle || 'Add Expense'} onClose={() => { setShow(false); setForm(blank) }} T={T}>
+        <Modal title={L.addExpenseTitle || 'Add Expense'} onClose={() => { setShow(false); setForm(blank) }} T={T}
+          footer={
+            <div style={{ display:'flex', gap:10 }}>
+              <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
+              <Btn onClick={saveExpense} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
+                {!saving && '✅ Save Expense'}
+              </Btn>
+            </div>
+          }
+        >
 
           {/* ── Category (always first) ── */}
           <Lbl label={L.expCategory} T={T}>
@@ -268,14 +277,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
           </div>
 
           {/* ── Action buttons ── */}
-          <div style={{ display:'flex', gap:8, marginTop:14 }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }} style={{ flex:1, justifyContent:'center' }}>
-              {L.cancel}
-            </Btn>
-            <Btn onClick={saveExp} disabled={saving} icon={isRestocking ? 'package' : 'download'} style={{ flex:2, justifyContent:'center' }}>
-              {saving ? 'Saving…' : isRestocking && form.restockProductId ? '✅ Save & Update Stock' : L.save}
-            </Btn>
-          </div>
+          
         </Modal>
       )}
     </div>

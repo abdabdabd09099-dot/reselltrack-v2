@@ -120,7 +120,16 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
 
       {/* ── Add entry modal ── */}
       {show && (
-        <Modal title={tab === 'lending' ? L.addLendingEntry : L.addBorrowingEntry} onClose={() => setShow(false)} T={T}>
+        <Modal title={tab === 'lending' ? L.addLendingEntry : L.addBorrowingEntry} onClose={() => setShow(false)} T={T}
+          footer={
+            <div style={{ display:'flex', gap:10 }}>
+              <Btn outline color={T.textSecondary} onClick={() => setShow(false)} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
+              <Btn onClick={saveEntry} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
+                {!saving && '✅ Save Entry'}
+              </Btn>
+            </div>
+          }
+        >
           <div style={{ display: 'grid', gap: 14 }}>
             <Lbl label={L.personName + ' *'} T={T}>
               <input value={form.personName} onChange={e => sf('personName', e.target.value)} />

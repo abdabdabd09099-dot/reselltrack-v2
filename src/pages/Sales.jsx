@@ -614,7 +614,18 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       {/* ── Daily Cash Recording Modal ── */}
       {showCashModal && (
-        <Modal title={L.recordCash || 'Record Daily Cash'} onClose={() => { setShowCashModal(false); setCashAmount(''); setCashNote(''); setCashSaved(false) }} T={T}>
+        <Modal title={L.recordCash || 'Record Daily Cash'} onClose={() => { setShowCashModal(false); setCashAmount(''); setCashNote(''); setCashSaved(false) }} T={T}
+          footer={
+            <div style={{ display:'flex', gap:10 }}>
+              <Btn outline color={T.textSecondary} onClick={() => { setShowCashModal(false); setCashAmount(''); setCashNote('') }} style={{ flex:1, justifyContent:'center', minHeight:52 }}>
+                Cancel
+              </Btn>
+              <Btn onClick={saveDailyCash} disabled={!cashAmount || cashSaved} color={GRN} icon="check" style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
+                {cashSaved ? '✅ Saved!' : 'Save Cash Record'}
+              </Btn>
+            </div>
+          }
+        >
           <p style={{ fontSize:13, color:T.textSecondary, marginBottom:16, lineHeight:1.6 }}>
             Count your physical cash at end of day and record the total. It will be compared with your calculated sales in Reports.
           </p>
@@ -692,14 +703,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             </div>
           </div>
 
-          <div style={{ display:'flex', gap:8 }}>
-            <Btn outline color={T.textSecondary} onClick={() => { setShowCashModal(false); setCashAmount(''); setCashNote('') }} style={{ flex:1, justifyContent:'center' }}>
-              Cancel
-            </Btn>
-            <Btn onClick={saveDailyCash} disabled={!cashAmount || cashSaved} color={GRN} icon="check" style={{ flex:2, justifyContent:'center' }}>
-              {cashSaved ? '✅ Saved!' : 'Save Cash Record'}
-            </Btn>
-          </div>
+
         </Modal>
       )}
     </div>
