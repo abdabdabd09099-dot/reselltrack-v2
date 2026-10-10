@@ -100,7 +100,7 @@ export const countPending = async () => {
 // ── Sync pending records to Supabase ─────────────────────────────────────────
 // Returns { synced, failed } counts
 export const syncToSupabase = async (userId, callbacks = {}) => {
-  if (!navigator.onLine) return { synced: 0, failed: 0 }
+  if (typeof navigator === 'undefined' || !navigator.onLine) return { synced: 0, failed: 0 }
 
   let synced = 0, failed = 0
 

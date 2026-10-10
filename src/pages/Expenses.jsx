@@ -79,7 +79,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       let created
       if (isDemo) {
         created = demoApi.expenses.create(payload)
-      } else if (!navigator.onLine) {
+      } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         created = await saveOffline('expenses', { ...payload, userId })
         toast.error('📡 Offline. Expense saved and will sync when reconnected.')
       } else {

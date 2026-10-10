@@ -232,7 +232,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         if (isDemo) {
           created = demoApi.sales.create(sale)
           if (!created) { onDemoLimit?.(); setSaving(false); return }
-        } else if (!navigator.onLine) {
+        } else if (typeof navigator === 'undefined' || !navigator.onLine) {
           created = await saveOffline('sales', { ...sale, userId })
           toast.info('📡 Offline — sale saved locally and will sync when reconnected.')
         } else {

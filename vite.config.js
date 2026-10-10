@@ -178,6 +178,9 @@ export default defineConfig({
   build: {
     sourcemap: false,
     chunkSizeWarningLimit: 800,
+    // Target ES2017+ — covers Chrome 67+, Firefox 60+, Safari 11+,
+    // Huawei Browser 10+, Samsung Internet 8.2+, Android WebView 67+
+    target: ['es2017', 'chrome67', 'firefox60', 'safari11', 'edge18'],
     rollupOptions: {
       output: {
         // Split chunks for better caching

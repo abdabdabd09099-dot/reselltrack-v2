@@ -226,8 +226,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         display: "flex",
         flexDirection: "column",
         background: T.surface,
-        /* Prevent any parent transform/overflow affecting this */
-        isolation: "isolate",
+        willChange: "transform", /* GPU layer on Android */
       }}
     >
       {/* ── Fixed header ── */}
@@ -236,7 +235,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 16px",
-        paddingTop: "max(16px, env(safe-area-inset-top))",
+        paddingTop: "max(16px, env(safe-area-inset-top, 0px))",
         paddingBottom: "14px",
         borderBottom: `1px solid ${T.border}`,
         flexShrink: 0,
@@ -276,10 +275,11 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
           overflowX: "hidden",
           WebkitOverflowScrolling: "touch",
           overscrollBehavior: "contain",
+          touchAction: "pan-y",
           padding: "16px",
           paddingBottom: footer
             ? "8px"
-            : "max(100px, calc(env(safe-area-inset-bottom) + 80px))",
+            : "max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))",
         }}
       >
         {children}
@@ -290,7 +290,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         <div style={{
           flexShrink: 0,
           padding: "12px 16px",
-          paddingBottom: "max(20px, calc(env(safe-area-inset-bottom) + 12px))",
+          paddingBottom: "max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           borderTop: `1px solid ${T.border}`,
           background: T.surface,
           boxShadow: "0 -4px 20px #00000018",

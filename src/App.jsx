@@ -290,7 +290,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="content">
+          <div className="content" style={{ touchAction: "pan-y", userSelect: "none" }}>
             {/* Demo top banner */}
             {isDemo && (
               <div style={{ background: '#F5A62318', border: '1px solid #F5A62344', borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
