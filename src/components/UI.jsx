@@ -7,7 +7,7 @@
 //  • Composable: small focused APIs, no God-components
 //  • Performance: stable references, no inline arrow fns in render where possible
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useRef, useEffect, useCallback, memo } from 'react'
+import { useState, useRef, useEffect, useCallback, memo, createPortal } from 'react'
 import {
   LayoutDashboard, Package, ShoppingBag, Receipt, Handshake,
   BarChart2, Settings, Home, Plus, Trash2, Pencil, CheckCircle,
@@ -212,17 +212,29 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
     }
   }, [onClose])
 
-  return (
-    <div role="dialog" aria-modal="true" aria-label={title}
+  // createPortal renders the modal directly on document.body,
+  // bypassing any overflow:hidden/auto ancestors — fixes iOS scroll trap
+  return createPortal(
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label={title}
       style={{
-        position: "fixed", inset: 0, zIndex: 9999,
-        display: "flex", flexDirection: "column",
+        position: "fixed",
+        top: 0, left: 0, right: 0, bottom: 0,
+        zIndex: 9999,
+        display: "flex",
+        flexDirection: "column",
         background: T.surface,
+        /* Prevent any parent transform/overflow affecting this */
+        isolation: "isolate",
       }}
     >
       {/* ── Fixed header ── */}
       <div style={{
-        display: "flex", alignItems: "center", justifyContent: "space-between",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
         padding: "0 16px",
         paddingTop: "max(16px, env(safe-area-inset-top))",
         paddingBottom: "14px",
@@ -234,32 +246,46 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         <span className="dm" style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary, letterSpacing: "-0.3px" }}>
           {title}
         </span>
-        <button onClick={onClose} aria-label="Close" style={{
-          background: T.surfaceHigh, border: `1px solid ${T.border}`,
-          borderRadius: 10, width: 38, height: 38, minWidth: 38,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          cursor: "pointer", flexShrink: 0,
-        }}>
+        <button
+          onClick={onClose}
+          aria-label="Close"
+          style={{
+            background: T.surfaceHigh,
+            border: `1px solid ${T.border}`,
+            borderRadius: 10,
+            width: 38, height: 38, minWidth: 38,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer", flexShrink: 0,
+          }}
+        >
           <Icon name="close" size={18} color={T.textSecondary} />
         </button>
       </div>
 
-      {/* ── Scrollable body — grows to fill space between header and footer ── */}
-      <div ref={bodyRef} style={{
-        flex: "1 1 0",
-        minHeight: 0,
-        overflowY: "scroll",
-        overflowX: "hidden",
-        WebkitOverflowScrolling: "touch",
-        overscrollBehavior: "contain",
-        padding: "16px",
-        /* Extra bottom padding so last item isn't hidden behind footer */
-        paddingBottom: footer ? "8px" : "max(100px, calc(env(safe-area-inset-bottom) + 80px))",
-      }}>
+      {/* ── Scrollable body ──
+           flex:1 + minHeight:0 = mandatory pair for scroll in flex column
+           -webkit-overflow-scrolling:touch = momentum scroll on iOS
+           Portal placement ensures no overflow:hidden parent clips this
+      ── */}
+      <div
+        ref={bodyRef}
+        style={{
+          flex: "1 1 0",
+          minHeight: 0,
+          overflowY: "scroll",
+          overflowX: "hidden",
+          WebkitOverflowScrolling: "touch",
+          overscrollBehavior: "contain",
+          padding: "16px",
+          paddingBottom: footer
+            ? "8px"
+            : "max(100px, calc(env(safe-area-inset-bottom) + 80px))",
+        }}
+      >
         {children}
       </div>
 
-      {/* ── Sticky footer — always visible, never scrolls away ── */}
+      {/* ── Sticky footer — always visible ── */}
       {footer && (
         <div style={{
           flexShrink: 0,
@@ -267,12 +293,13 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
           paddingBottom: "max(20px, calc(env(safe-area-inset-bottom) + 12px))",
           borderTop: `1px solid ${T.border}`,
           background: T.surface,
-          boxShadow: "0 -4px 16px #00000022",
+          boxShadow: "0 -4px 20px #00000018",
         }}>
           {footer}
         </div>
       )}
-    </div>
+    </div>,
+    document.body
   )
 }
 
