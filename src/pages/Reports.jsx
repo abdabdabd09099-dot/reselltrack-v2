@@ -37,15 +37,15 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   }
 
   // ── Filtered data ──────────────────────────────────────────────────────────
-  const filtSales   = sales.filter(s => inRange(s.date, range))
-  const filtExp     = expenses.filter(e => inRange(e.date, range))
+  const filtSales   = (sales||[]).filter(s => inRange(s.date, range))
+  const filtExp     = (expenses||[]).filter(e => inRange(e.date, range))
   const totalRev    = filtSales.reduce((a, s) => a + s.amountPaid, 0)
   const totalCalc   = filtSales.reduce((a, s) => a + s.totalAmount, 0)  // calculated total
   const totalExp    = filtExp.reduce((a, e) => a + e.amount, 0)
   const netProfit   = totalRev - totalExp
   const totalUncol  = filtSales.reduce((a, s) => a + s.balance, 0)
-  const lendPend    = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const borrPend    = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const lendPend    = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const borrPend    = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
   // Include split payments in cash/transfer totals
   const cashTotal = filtSales.reduce((a, s) => {
     if (s.paymentMethod === 'cash')     return a + s.amountPaid

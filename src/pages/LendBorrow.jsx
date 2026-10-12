@@ -66,8 +66,8 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
     } catch (e) { toast.error(e.message) }
   }
 
-  const lp   = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const bp   = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const lp   = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const bp   = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
   const net  = lp - bp
   const list = tab === 'lending' ? lending : borrowing
 

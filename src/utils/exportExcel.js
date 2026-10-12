@@ -35,7 +35,7 @@ const buildSalesSheet = (sales, currencySymbol) => {
   const rows = [
     ['Sale ID', 'Date', 'Time', 'Customer', 'Contact', 'Items', 'Qty', 'Total Amount', 'Amount Paid', 'Balance', 'Payment Method', 'Status', 'Notes'],
   ]
-  sales.forEach(s => {
+  (sales||[]).forEach(s => {
     const itemsText = s.items.map(i => `${i.productName} x${i.qty} @ ${fmtMoney(i.unitPrice, currencySymbol)}`).join('\n')
     const totalQty  = s.items.reduce((a, i) => a + i.qty, 0)
     rows.push([
@@ -79,7 +79,7 @@ const buildProductsSheet = (products, currencySymbol) => {
   const rows = [
     ['SKU', 'Product Name', 'Category', 'Description', 'Buy Price', 'Sell Price', 'Stock', 'Stock Value', 'Potential Revenue', 'Margin %'],
   ]
-  products.forEach(p => {
+  (products||[]).forEach(p => {
     const margin  = p.sellPrice > 0 ? (((p.sellPrice - p.buyPrice) / p.sellPrice) * 100).toFixed(1) : 0
     rows.push([
       p.sku,
@@ -115,7 +115,7 @@ const buildExpensesSheet = (expenses) => {
   const rows = [
     ['Date', 'Description', 'Category', 'Amount', 'Notes'],
   ]
-  expenses.forEach(e => {
+  (expenses||[]).forEach(e => {
     rows.push([
       fmtDate(e.date),
       e.description,
@@ -139,7 +139,7 @@ const buildLendingSheet = (lending) => {
   const rows = [
     ['Person', 'Contact', 'Amount', 'Date', 'Due Date', 'Source', 'Status', 'Notes'],
   ]
-  lending.forEach(l => {
+  (lending||[]).forEach(l => {
     rows.push([
       l.personName,
       l.contact || '',
@@ -167,7 +167,7 @@ const buildBorrowingSheet = (borrowing) => {
   const rows = [
     ['Person', 'Contact', 'Amount', 'Date', 'Due Date', 'Status', 'Notes'],
   ]
-  borrowing.forEach(b => {
+  (borrowing||[]).forEach(b => {
     rows.push([
       b.personName,
       b.contact || '',
@@ -229,9 +229,9 @@ const buildSummarySheet = (data, currencySymbol) => {
     [],
     ['── ACTIVITY ────────────────────────────'],
     ['Total Sales Transactions',   sales.length],
-    ['Paid Sales',                 sales.filter(s => s.status === 'Paid').length],
-    ['Partial Sales',              sales.filter(s => s.status === 'Partial').length],
-    ['Unpaid Sales',               sales.filter(s => s.status === 'Unpaid').length],
+    ['Paid Sales',                 (sales||[]).filter(s => s.status === 'Paid').length],
+    ['Partial Sales',              (sales||[]).filter(s => s.status === 'Partial').length],
+    ['Unpaid Sales',               (sales||[]).filter(s => s.status === 'Unpaid').length],
     ['Total Expenses Recorded',    expenses.length],
     ['Total Lending Entries',      lending.length],
     ['Total Borrowing Entries',    borrowing.length],
