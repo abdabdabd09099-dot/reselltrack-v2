@@ -57,14 +57,14 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     if (s.paymentMethod === 'split')    return a + (s.transferPaid || 0)
     return a
   }, 0)
-  const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
+  const totalUnits      = filtSales.flatMap(s => s.items||[]).reduce((a, i) => a + (i.qty||0), 0)
 
 
 
   // ── Products performance — memoised ───────────────────────────────────────
   const prodList = useMemo(() => {
     const map = {}
-    filtSales.forEach(s => s.items.forEach(item => {
+    filtSales.forEach(s => (s.items||[]).forEach(item => {
       if (!map[item.productName]) map[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
       map[item.productName].units   += item.qty
       map[item.productName].revenue += item.qty * item.unitPrice
@@ -556,7 +556,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
                     {/* Items & units */}
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 200 }}>
-                      {s.items.map((item, x) => (
+                      {(s.items||[]).map((item, x) => (
                         <div key={x} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: x < s.items.length - 1 ? 4 : 0 }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: CHART_PAL[x % CHART_PAL.length], flexShrink: 0 }} />
                           <span style={{ fontSize: 12, color: T.textPrimary }}>{item.productName}</span>
@@ -569,7 +569,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
                       ))}
                       <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px dashed ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
-                          {s.items.reduce((a, i) => a + i.qty, 0)} unit{s.items.reduce((a, i) => a + i.qty, 0) !== 1 ? 's' : ''}
+                          {(s.items||[]).reduce((a, i) => a + (i.qty||0), 0)} unit{(s.items||[]).reduce((a, i) => a + (i.qty||0), 0) !== 1 ? 's' : ''}
                         </span>
                       </div>
                     </td>

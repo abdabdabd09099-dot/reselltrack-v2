@@ -89,7 +89,7 @@ export default function Dashboard({ products, sales, expenses, lending, borrowin
               <div key={s.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: `1px solid ${T.border}22` }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 500, color: T.textPrimary }}>{s.customerName}</div>
-                  <div style={{ fontSize: 11, color: T.textSecondary }}>{s.items.map(i => i.productName).join(', ')} · {fmtD(s.date)}</div>
+                  <div style={{ fontSize: 11, color: T.textSecondary }}>{(s.items||[]).map(i => i.productName).join(', ')} · {fmtD(s.date)}</div>
                 </div>
                 <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: 8 }}>
                   <div className="mono" style={{ color: GRN, fontSize: 13, fontWeight: 600 }}>{cur(s.amountPaid)}</div>

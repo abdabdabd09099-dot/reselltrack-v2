@@ -138,7 +138,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     setForm({
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
-      items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
+      items: (s.items||[]).map(i => ({ ...i, variant: i.variant || '' })),
       paymentMethod: s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'cash' : 'transfer') : s.paymentMethod,
       amountPaid:    s.paymentMethod === 'split' ? String(s.cashPaid || s.amountPaid) : String(s.amountPaid),
       splitMethod:   s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'transfer' : 'cash') : 'transfer',
@@ -158,12 +158,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       } else {
         await sb.from('sale_items').delete().eq('sale_id', s.id)
         await sb.from('sales').delete().eq('id', s.id)
-        for (const item of s.items) {
+        for (const item of (s.items||[])) {
           const prod = products.find(p => p.id === item.productId)
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
         }
         setProducts(ps => ps.map(p => {
-          const it = s.items.find(i => i.productId === p.id)
+          const it = (s.items||[]).find(i => i.productId === p.id)
           return it ? { ...p, stock: p.stock + it.qty } : p
         }))
         setSales(ss => ss.filter(x => x.id !== s.id))
@@ -275,12 +275,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     if (filterSt !== 'all' && s.status.toLowerCase() !== filterSt) return false
     if (filterMethod !== 'all' && s.paymentMethod !== filterMethod) return false
     if (range && !inRange(s.date, range)) return false
-    if (filterProduct && !s.items.some(i => i.productName === filterProduct)) return false
+    if (filterProduct && !(s.items||[]).some(i => i.productName === filterProduct)) return false
     if (srch) { const q = srch.toLowerCase(); if (!s.customerName.toLowerCase().includes(q)) return false }
     return true
   })
 
-  const productNames = [...new Set(sales.flatMap(s => s.items.map(i => i.productName)))].filter(Boolean).sort()
+  const productNames = [...new Set(sales.flatMap(s => (s.items||[]).map(i => i.productName)))].filter(Boolean).sort()
   const todayRev     = sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
   const totalUncol   = sales.reduce((a,s) => a + s.balance, 0)
 
@@ -371,7 +371,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               <div style={{ fontWeight:500, color:T.textPrimary }}>{s.customerName}</div>
               {s.contact && <div style={{ fontSize:11, color:T.textSecondary }}>{s.contact}</div>}
             </div>,
-            <div>{s.items.map((i,x) => <div key={x} style={{ fontSize:11, color:T.textSecondary }}>{i.productName} ×{i.qty}{i.variant?` (${i.variant})`:''}</div>)}</div>,
+            <div>{(s.items||[]).map((i,x) => <div key={x} style={{ fontSize:11, color:T.textSecondary }}>{i.productName} ×{i.qty}{i.variant?` (${i.variant})`:''}</div>)}</div>,
             <span className="mono" style={{ fontWeight:600, color:T.textPrimary }}>{cur(s.totalAmount)}</span>,
             <span className="mono" style={{ color:GRN }}>{cur(s.amountPaid)}</span>,
             <span className="mono" style={{ color:s.balance>0?RED:T.textMuted }}>{s.balance>0?cur(s.balance):'—'}</span>,
@@ -382,8 +382,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   <Badge color={BLU}>📲 {cur(s.transferPaid||0)}</Badge>
                 </>
               ) : (
-                <Badge color={s.paymentMethod==='cash'?GRN:BLU}>
-                  {s.paymentMethod==='cash'?'💵 Cash':'📲 Transfer'}
+                <Badge color={s.paymentMethod==='transfer'?BLU:GRN}>
+                  {s.paymentMethod==='transfer'?'📲 Transfer':'💵 Cash'}
                 </Badge>
               )}
             </div>,
