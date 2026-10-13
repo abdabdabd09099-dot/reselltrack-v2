@@ -38,13 +38,13 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
   const isRestocking        = form.category === 'Restocking'
-  const selectedProduct     = products.find(p => p.id === form.restockProductId)
+  const selectedProduct     = (products||[]).find(p => p.id === form.restockProductId)
   const restockTotal        = +form.restockQty * +form.restockUnitPrice
   const newStockAfterRestock = selectedProduct ? selectedProduct.stock + +form.restockQty : 0
 
   // ── Select restocking product — auto-fill fields ──────────────────────────
   const selectRestockProduct = productId => {
-    const p = products.find(p => p.id === productId)
+    const p = (products||[]).find(p => p.id === productId)
     setForm(f => ({
       ...f,
       restockProductId: productId,
@@ -87,7 +87,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       }
       // Update product stock on restock
       if (isRestocking && form.restockProductId && form.restockQty > 0 && !isDemo) {
-        const prod = products.find(p => p.id === form.restockProductId)
+        const prod = (products||[]).find(p => p.id === form.restockProductId)
         if (prod) {
           const newStock = prod.stock + +form.restockQty
           await apiProducts.update(form.restockProductId, { ...prod, stock: newStock })
@@ -109,8 +109,8 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
     } catch(e) { toast.error('Delete failed: ' + e.message) }
   }
 
-  const todayTot = expenses.filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)
-  const monthTot = expenses.filter(e => inRange(e.date, thisMonthRange())).reduce((a,e) => a + e.amount, 0)
+  const todayTot = (expenses||[]).filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)
+  const monthTot = (expenses||[]).filter(e => inRange(e.date, thisMonthRange())).reduce((a,e) => a + e.amount, 0)
 
   return (
     <div className="fade-in">
@@ -132,7 +132,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
         <Tbl T={T} empty={L.noRecords}
           cols={[L.date, L.expDescription, L.expCategory, L.expenseAmount, L.notes, '']}
-          rows={expenses.map(e => [
+          rows={(expenses||[]).map(e => [
             <span style={{ fontSize:12, color:T.textSecondary, whiteSpace:'nowrap' }}>{fmtD(e.date)}</span>,
             <span style={{ fontWeight:500, color:T.textPrimary }}>{e.description}</span>,
             e.category ? <Badge color={e.category==='Restocking' ? GRN : PUR}>{e.category}</Badge> : <span style={{ color:T.textMuted }}>—</span>,
@@ -183,7 +183,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
               <Lbl label={L.restockingProduct || 'Product'} T={T}>
                 <select value={form.restockProductId} onChange={e => selectRestockProduct(e.target.value)} style={{ fontSize:13 }}>
                   <option value="">-- Choose product --</option>
-                  {products.map(p => (
+                  {(products||[]).map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>

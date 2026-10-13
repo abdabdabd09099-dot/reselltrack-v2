@@ -61,10 +61,10 @@ const buildSalesSheet = (sales, currencySymbol) => {
   rows.push([])
   rows.push([
     'TOTALS', '', '', '', '', '',
-    sales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0),
-    sales.reduce((a, s) => a + s.totalAmount, 0),
-    sales.reduce((a, s) => a + s.amountPaid,  0),
-    sales.reduce((a, s) => a + s.balance,     0),
+    (sales||[]).flatMap(s => s.items).reduce((a, i) => a + i.qty, 0),
+    (sales||[]).reduce((a, s) => a + s.totalAmount, 0),
+    (sales||[]).reduce((a, s) => a + s.amountPaid,  0),
+    (sales||[]).reduce((a, s) => a + s.balance,     0),
     '', '', '',
   ])
 
@@ -98,9 +98,9 @@ const buildProductsSheet = (products, currencySymbol) => {
   rows.push([])
   rows.push([
     'TOTALS', '', '', '', '', '',
-    products.reduce((a, p) => a + p.stock, 0),
-    products.reduce((a, p) => a + p.buyPrice * p.stock, 0),
-    products.reduce((a, p) => a + p.sellPrice * p.stock, 0),
+    (products||[]).reduce((a, p) => a + p.stock, 0),
+    (products||[]).reduce((a, p) => a + p.buyPrice * p.stock, 0),
+    (products||[]).reduce((a, p) => a + p.sellPrice * p.stock, 0),
     '',
   ])
 
@@ -126,7 +126,7 @@ const buildExpensesSheet = (expenses) => {
   })
 
   rows.push([])
-  rows.push(['TOTAL', '', '', expenses.reduce((a, e) => a + e.amount, 0), ''])
+  rows.push(['TOTAL', '', '', (expenses||[]).reduce((a, e) => a + e.amount, 0), ''])
 
   const ws = XLSX.utils.aoa_to_sheet(rows)
   setColWidths(ws, [12, 30, 18, 12, 28])
@@ -152,7 +152,7 @@ const buildLendingSheet = (lending) => {
     ])
   })
 
-  const pending = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const pending = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
   rows.push([])
   rows.push(['PENDING TOTAL', '', pending, '', '', '', '', ''])
 
@@ -179,7 +179,7 @@ const buildBorrowingSheet = (borrowing) => {
     ])
   })
 
-  const pending = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const pending = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
   rows.push([])
   rows.push(['PENDING TOTAL', '', pending, '', '', '', ''])
 
@@ -193,13 +193,13 @@ const buildBorrowingSheet = (borrowing) => {
 const buildSummarySheet = (data, currencySymbol) => {
   const { sales, products, expenses, lending, borrowing, settings } = data
   const sym      = currencySymbol
-  const totalRev = sales.reduce((a, s) => a + s.amountPaid, 0)
-  const totalExp = expenses.reduce((a, e) => a + e.amount, 0)
+  const totalRev = (sales||[]).reduce((a, s) => a + s.amountPaid, 0)
+  const totalExp = (expenses||[]).reduce((a, e) => a + e.amount, 0)
   const netProfit = totalRev - totalExp
-  const totalUncol = sales.reduce((a, s) => a + s.balance, 0)
-  const pendingLend = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const pendingBorr = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
-  const stockVal   = products.reduce((a, p) => a + p.buyPrice * p.stock, 0)
+  const totalUncol = (sales||[]).reduce((a, s) => a + s.balance, 0)
+  const pendingLend = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const pendingBorr = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const stockVal   = (products||[]).reduce((a, p) => a + p.buyPrice * p.stock, 0)
 
   const now = new Date()
   const rows = [
@@ -221,11 +221,11 @@ const buildSummarySheet = (data, currencySymbol) => {
     [],
     ['── INVENTORY ───────────────────────────'],
     ['Total Products',              products.length],
-    ['Total Stock Units',           products.reduce((a, p) => a + p.stock, 0)],
+    ['Total Stock Units',           (products||[]).reduce((a, p) => a + p.stock, 0)],
     ['Stock Value (Buy Price)',     stockVal],
-    ['Stock Value (Sell Price)',    products.reduce((a, p) => a + p.sellPrice * p.stock, 0)],
-    ['Low Stock Items',             products.filter(p => p.stock <= 3 && p.stock > 0).length],
-    ['Out of Stock Items',          products.filter(p => p.stock === 0).length],
+    ['Stock Value (Sell Price)',    (products||[]).reduce((a, p) => a + p.sellPrice * p.stock, 0)],
+    ['Low Stock Items',             (products||[]).filter(p => p.stock <= 3 && p.stock > 0).length],
+    ['Out of Stock Items',          (products||[]).filter(p => p.stock === 0).length],
     [],
     ['── ACTIVITY ────────────────────────────'],
     ['Total Sales Transactions',   sales.length],

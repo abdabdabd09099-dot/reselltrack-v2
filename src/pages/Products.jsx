@@ -59,11 +59,11 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
     catch (e) { toast.error('Delete failed: ' + e.message) }
   }
 
-  const list     = products.filter(p =>
+  const list     = (products||[]).filter(p =>
     p.name.toLowerCase().includes(srch.toLowerCase()) ||
     (p.category || '').toLowerCase().includes(srch.toLowerCase())
   )
-  const totalVal = products.reduce((a, p) => a + (p.buyPrice * p.stock), 0)
+  const totalVal = (products||[]).reduce((a, p) => a + (p.buyPrice * p.stock), 0)
 
   return (
     <div className="fade-in">
@@ -78,8 +78,8 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
       <div className="stat-grid">
         <Stat label={L.totalProducts} value={products.length}                                     color={T.accent} icon="📦" T={T} />
         <Stat label={L.stockValue}    value={cur(totalVal)}                                       color={BLU}      icon="💼" T={T} />
-        <Stat label={L.lowStock}      value={products.filter(p => p.stock <= 3 && p.stock > 0).length} color={AMB} icon="alert" T={T} />
-        <Stat label={L.outOfStock}    value={products.filter(p => p.stock === 0).length}          color={RED}      icon="error" T={T} />
+        <Stat label={L.lowStock}      value={(products||[]).filter(p => p.stock <= 3 && p.stock > 0).length} color={AMB} icon="alert" T={T} />
+        <Stat label={L.outOfStock}    value={(products||[]).filter(p => p.stock === 0).length}          color={RED}      icon="error" T={T} />
       </div>
 
       {/* ── Table ── */}

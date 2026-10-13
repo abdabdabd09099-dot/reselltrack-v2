@@ -78,8 +78,8 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     const days = []; const start = new Date(range[0]); const end = new Date(range[1])
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const ds  = d.toISOString().slice(0, 10)
-      const rev = sales.filter(s => s.date.slice(0, 10) === ds).reduce((a, s) => a + s.amountPaid, 0)
-      const exp = expenses.filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0)
+      const rev = (sales||[]).filter(s => s.date.slice(0, 10) === ds).reduce((a, s) => a + s.amountPaid, 0)
+      const exp = (expenses||[]).filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0)
       days.push({ date: fmtShort(ds), Revenue: rev, Expenses: exp, Profit: rev - exp })
     }
     return { series: days, multiDay: days.length > 1 }
@@ -98,7 +98,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
   // ── Record and compare daily cash flow ────────────────────────────────────
   const recordCashFlow = () => {
-    const daySales   = sales.filter(s => s.date.slice(0,10) === cashFlowDate)
+    const daySales   = (sales||[]).filter(s => s.date.slice(0,10) === cashFlowDate)
     const calculated = daySales.reduce((a,s) => a + s.amountPaid, 0)
     // Read actual cash from dailyCash utility (saved via Sales page 'Record Cash' button)
     const saved  = dailyCash.getAll()

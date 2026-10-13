@@ -102,7 +102,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       const items = [...f.items]
       items[idx] = { ...items[idx], [key]: val }
       if (key === 'productId') {
-        const p = products.find(p => p.id === val)
+        const p = (products||[]).find(p => p.id === val)
         if (p) {
           if (p.stock <= 0) {
             setItemWarn(`⛔ "${p.name}" is out of stock.`)
@@ -121,7 +121,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         }
       }
       if (key === 'qty') {
-        const p = products.find(p => p.id === items[idx].productId)
+        const p = (products||[]).find(p => p.id === items[idx].productId)
         if (p && val > p.stock) {
           setItemWarn(`⚠️ Only ${p.stock} units of "${p.name}" available.`)
           items[idx].qty = p.stock
@@ -159,7 +159,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         await sb.from('sale_items').delete().eq('sale_id', s.id)
         await sb.from('sales').delete().eq('id', s.id)
         for (const item of (s.items||[])) {
-          const prod = products.find(p => p.id === item.productId)
+          const prod = (products||[]).find(p => p.id === item.productId)
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
         }
         setProducts(ps => ps.map(p => {
@@ -178,7 +178,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     const validItems = form.items.filter(i => i.productId)
     if (!validItems.length) return toast.error('Add at least one product.')
     for (const item of validItems) {
-      const p = products.find(p => p.id === item.productId)
+      const p = (products||[]).find(p => p.id === item.productId)
       if (!p) continue
       const alreadyHeld = editSale ? (editSale.items.find(oi => oi.productId === item.productId)?.qty || 0) : 0
       if (item.qty > p.stock + alreadyHeld) return toast.error(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
@@ -206,11 +206,11 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       if (editSale) {
         for (const oi of editSale.items) {
-          const p = products.find(p => p.id === oi.productId)
+          const p = (products||[]).find(p => p.id === oi.productId)
           if (p) await apiProducts.update(oi.productId, { ...p, stock: p.stock + oi.qty })
         }
         for (const ni of validItems) {
-          const p = products.find(p => p.id === ni.productId)
+          const p = (products||[]).find(p => p.id === ni.productId)
           if (p) await apiProducts.update(ni.productId, { ...p, stock: Math.max(0, p.stock - ni.qty) })
         }
         setProducts(ps => ps.map(p => {
@@ -239,7 +239,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           created = await apiSales.create(sale, userId)
         }
         for (const item of validItems) {
-          const prod = products.find(p => p.id === item.productId)
+          const prod = (products||[]).find(p => p.id === item.productId)
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: Math.max(0, prod.stock - item.qty) })
         }
         setProducts(ps => ps.map(p => { const it = validItems.find(i => i.productId === p.id); return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p }))
@@ -271,7 +271,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const resetFilters = () => { setSrch(''); setFilterSt('all'); setFilterPeriod('all'); setFilterProduct(''); setFilterMethod('all') }
   const hasFilter    = srch || filterSt !== 'all' || filterPeriod !== 'all' || filterProduct || filterMethod !== 'all'
   const range        = getPeriodRange()
-  const filtered     = sales.filter(s => {
+  const filtered     = (sales||[]).filter(s => {
     if (filterSt !== 'all' && s.status.toLowerCase() !== filterSt) return false
     if (filterMethod !== 'all' && s.paymentMethod !== filterMethod) return false
     if (range && !inRange(s.date, range)) return false
@@ -281,8 +281,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   })
 
   const productNames = [...new Set(sales.flatMap(s => (s.items||[]).map(i => i.productName)))].filter(Boolean).sort()
-  const todayRev     = sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
-  const totalUncol   = sales.reduce((a,s) => a + s.balance, 0)
+  const todayRev     = (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+  const totalUncol   = (sales||[]).reduce((a,s) => a + s.balance, 0)
 
   return (
     <div className="fade-in">
@@ -304,7 +304,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         <Stat label={L.todayRevenue} value={cur(todayRev)}   color={GRN} icon="trending-up"  T={T} />
         <Stat label={L.uncollected}  value={cur(totalUncol)} color={AMB} icon="clock"         T={T} />
         <Stat label={L.transactions} value={sales.length}    color={BLU} icon="sales"         T={T} />
-        <Stat label={L.paid}         value={sales.filter(s => s.status==='Paid').length} color={T.accent} icon="check" T={T} />
+        <Stat label={L.paid}         value={(sales||[]).filter(s => s.status==='Paid').length} color={T.accent} icon="check" T={T} />
       </div>
 
       {/* ── Edit notice ── */}
@@ -452,7 +452,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>{L.product} *</label>
                 <select value={item.productId} onChange={e => updItem(idx,'productId',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }}>
                   <option value="">{L.selectProduct}</option>
-                  {products.map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
+                  {(products||[]).map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
                 </select>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 72px 60px 30px', gap:6, alignItems:'flex-end', marginTop:6 }}>
@@ -637,7 +637,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               {cur(sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
             </div>
             <div style={{ fontSize:11, color:T.textMuted, marginTop:3 }}>
-              {sales.filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
+              {(sales||[]).filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
             </div>
           </div>
 
@@ -653,8 +653,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 placeholder="Enter total cash you counted..."
                 style={{ width:'100%', fontSize:20, fontWeight:800, padding:'12px 14px', boxSizing:'border-box',
                   borderColor: cashAmount ? (
-                    parseFloat(cashAmount) === sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
-                    ? GRN : parseFloat(cashAmount) > sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    parseFloat(cashAmount) === (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    ? GRN : parseFloat(cashAmount) > (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
                     ? BLU : RED
                   ) : T.border }}
               />
@@ -662,7 +662,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
             {/* Live difference preview */}
             {cashAmount && (() => {
-              const daySales = sales.filter(s => s.date.slice(0,10) === todayStr())
+              const daySales = (sales||[]).filter(s => s.date.slice(0,10) === todayStr())
               const calc     = daySales.reduce((a,s) => a + s.amountPaid, 0)
               const actual   = parseFloat(cashAmount) || 0
               const diff     = actual - calc
