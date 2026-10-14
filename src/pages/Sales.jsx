@@ -3,7 +3,7 @@ import { apiSales, apiProducts, apiLending, sb } from '../utils/supabase.js'
 import { saveOffline } from '../utils/offlineQueue.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, Skeleton, ProgressBar, Tabs, Divider, SecTitle } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 import { toast } from '../utils/toast.jsx'
 import { dailyCash } from '../utils/dailyCash.js'
 
@@ -89,7 +89,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const [form, setForm] = useState(mkBlank())
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
-  const rowTotal     = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
+  const rowTotal     = (form.items||[]).reduce((a,i) => a + ((i.qty||0) * (i.unitPrice||0)), 0)
   const rowPaid1     = +form.amountPaid  || 0
   const rowPaid2     = +form.splitAmount || 0
   const rowTotalPaid = rowPaid1 + rowPaid2
@@ -180,7 +180,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     for (const item of validItems) {
       const p = (products||[]).find(p => p.id === item.productId)
       if (!p) continue
-      const alreadyHeld = editSale ? (editSale.items.find(oi => oi.productId === item.productId)?.qty || 0) : 0
+      const alreadyHeld = editSale ? ((editSale.items||[]).find(oi => oi.productId === item.productId)?.qty || 0) : 0
       if (item.qty > p.stock + alreadyHeld) return toast.error(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
     }
     setSaving(true)
@@ -280,7 +280,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     return true
   })
 
-  const productNames = [...new Set(sales.flatMap(s => (s.items||[]).map(i => i.productName)))].filter(Boolean).sort()
+  const productNames = [...new Set((sales||[]).flatMap(s => (s.items||[]).map(i => i.productName)))].filter(Boolean).sort()
   const todayRev     = (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
   const totalUncol   = (sales||[]).reduce((a,s) => a + s.balance, 0)
 
@@ -303,7 +303,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       <div className="stat-grid">
         <Stat label={L.todayRevenue} value={cur(todayRev)}   color={GRN} icon="trending-up"  T={T} />
         <Stat label={L.uncollected}  value={cur(totalUncol)} color={AMB} icon="clock"         T={T} />
-        <Stat label={L.transactions} value={sales.length}    color={BLU} icon="sales"         T={T} />
+        <Stat label={L.transactions} value={(sales||[]).length}    color={BLU} icon="sales"         T={T} />
         <Stat label={L.paid}         value={(sales||[]).filter(s => s.status==='Paid').length} color={T.accent} icon="check" T={T} />
       </div>
 
@@ -361,7 +361,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
         <div className="dm" style={{ fontWeight:700, fontSize:14, color:T.textPrimary, marginBottom:12 }}>
           Sales Records
-          {filtered.length !== sales.length && <span style={{ fontWeight:400, color:T.textSecondary, fontSize:12, marginLeft:8 }}>({filtered.length} of {sales.length})</span>}
+          {filtered.length !== (sales||[]).length && <span style={{ fontWeight:400, color:T.textSecondary, fontSize:12, marginLeft:8 }}>({filtered.length} of {(sales||[]).length})</span>}
         </div>
         <Tbl T={T} empty={L.noRecords}
           cols={[L.dateTime, L.customer, L.items, L.total, L.paid||'Paid', L.balance, L.method, L.status, 'Actions']}
@@ -634,7 +634,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
             <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>Today's Recorded Sales ({todayStr()})</div>
             <div className="mono" style={{ fontSize:22, fontWeight:800, color:T.accent }}>
-              {cur(sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
+              {cur((sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
             </div>
             <div style={{ fontSize:11, color:T.textMuted, marginTop:3 }}>
               {(sales||[]).filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
