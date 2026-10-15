@@ -7,7 +7,7 @@
 //  • Composable: small focused APIs, no God-components
 //  • Performance: stable references, no inline arrow fns in render where possible
 // ─────────────────────────────────────────────────────────────────────────────
-import { useState, useRef, useEffect, useCallback, memo, createPortal } from 'react'
+import { useState, useRef, useEffect, useCallback, memo } from 'react'
 import {
   LayoutDashboard, Package, ShoppingBag, Receipt, Handshake,
   BarChart2, Settings, Home, Plus, Trash2, Pencil, CheckCircle,
@@ -212,9 +212,9 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
     }
   }, [onClose])
 
-  // createPortal renders the modal directly on document.body,
-  // bypassing any overflow:hidden/auto ancestors — fixes iOS scroll trap
-  return createPortal(
+  // No createPortal — plain position:fixed covers full screen on all browsers
+  // including older Android WebView and Huawei Browser
+  return (
     <div
       role="dialog"
       aria-modal="true"
@@ -226,10 +226,12 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         display: "flex",
         flexDirection: "column",
         background: T.surface,
-        willChange: "transform", /* GPU layer on Android */
+        /* Force GPU layer — helps Android compositing */
+        WebkitTransform: "translateZ(0)",
+        transform: "translateZ(0)",
       }}
     >
-      {/* ── Fixed header ── */}
+      {/* Fixed header */}
       <div style={{
         display: "flex",
         alignItems: "center",
@@ -261,11 +263,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         </button>
       </div>
 
-      {/* ── Scrollable body ──
-           flex:1 + minHeight:0 = mandatory pair for scroll in flex column
-           -webkit-overflow-scrolling:touch = momentum scroll on iOS
-           Portal placement ensures no overflow:hidden parent clips this
-      ── */}
+      {/* Scrollable body — flex:1 + minHeight:0 mandatory for scroll */}
       <div
         ref={bodyRef}
         style={{
@@ -285,7 +283,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         {children}
       </div>
 
-      {/* ── Sticky footer — always visible ── */}
+      {/* Sticky footer */}
       {footer && (
         <div style={{
           flexShrink: 0,
@@ -298,8 +296,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
           {footer}
         </div>
       )}
-    </div>,
-    document.body
+    </div>
   )
 }
 
