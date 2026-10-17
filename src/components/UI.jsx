@@ -26,26 +26,29 @@ import { GRN, RED } from '../data/constants.js'
 // ICON REGISTRY
 // ─────────────────────────────────────────────────────────────────────────────
 const ICON_MAP = {
-  dashboard: LayoutDashboard, products: Package, sales: ShoppingBag,
-  expenses: Receipt, lend: Handshake, reports: BarChart2,
-  settings: Settings, home: Home, plus: Plus, trash: Trash2,
-  edit: Pencil, check: CheckCircle, alert: AlertTriangle,
-  error: XCircle, clock: Clock, 'trending-up': TrendingUp,
-  'trending-down': TrendingDown, wallet: Wallet, users: Users,
-  dollar: DollarSign, card: CreditCard, cash: Banknote,
-  transfer: ArrowLeftRight, 'chevron-down': ChevronDown,
-  'chevron-right': ChevronRight, lock: Lock, unlock: Unlock,
-  logout: LogOut, user: User, shield: ShieldCheck, bell: Bell,
-  download: Download, upload: Upload, refresh: RefreshCw,
-  search: Search, filter: Filter, close: X, wifi: Wifi,
-  'wifi-off': WifiOff, loader: Loader2, eye: Eye,
-  'eye-off': EyeOff, star: Star, tag: Tag, box: Box,
-  archive: Archive, layers: Layers, pie: PieChart,
-  file: FileText, globe: Globe, phone: Smartphone,
-  moon: Moon, sun: Sun, palette: Palette, info: Info,
-  external: ExternalLink, copy: Copy, package: Package2,
+  dashboard: LayoutDashboard, products: Package,    sales: ShoppingBag,
+  expenses: Receipt,          lend: Handshake,      reports: BarChart2,
+  settings: Settings,         home: Home,            plus: Plus,
+  trash: Trash2,              edit: Pencil,          check: CheckCircle,
+  alert: AlertTriangle,       error: XCircle,        clock: Clock,
+  'trending-up': TrendingUp,  'trending-down': TrendingDown,
+  wallet: Wallet,             users: Users,          dollar: DollarSign,
+  card: CreditCard,           cash: Banknote,        transfer: ArrowLeftRight,
+  'chevron-down': ChevronDown, 'chevron-right': ChevronRight,
+  lock: Lock,                 unlock: Unlock,        logout: LogOut,
+  user: User,                 shield: ShieldCheck,   bell: Bell,
+  download: Download,         upload: Upload,        refresh: RefreshCw,
+  search: Search,             filter: Filter,        close: X,
+  wifi: Wifi,                 'wifi-off': WifiOff,   loader: Loader2,
+  eye: Eye,                   'eye-off': EyeOff,     star: Star,
+  tag: Tag,                   box: Box,              archive: Archive,
+  layers: Layers,             pie: PieChart,         file: FileText,
+  globe: Globe,               phone: Smartphone,     moon: Moon,
+  sun: Sun,                   palette: Palette,      info: Info,
+  external: ExternalLink,     copy: Copy,            package: Package2,
   'check-square': CheckSquare, 'alert-circle': AlertCircle,
 }
+
 
 /**
  * Icon — resolves a string key to a Lucide icon.

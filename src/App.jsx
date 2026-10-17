@@ -291,7 +291,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="content" style={{ touchAction: "pan-y", userSelect: "none" }}>
+          <div className="content" style={{ touchAction: "pan-y" }}>
             <ErrorBoundary T={T} pageName={page}>
             {/* Demo top banner */}
             {isDemo && (
