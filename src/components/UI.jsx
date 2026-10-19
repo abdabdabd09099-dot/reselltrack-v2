@@ -201,100 +201,102 @@ Field.displayName = 'Field'
 // Traps focus, closes on Escape, prevents body scroll
 // ─────────────────────────────────────────────────────────────────────────────
 export const Modal = ({ title, onClose, children, footer, wide, T }) => {
-  const bodyRef = useRef(null)
-
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", onKey)
-    document.body.style.overflow = "hidden"
+    /* Freeze background scroll but keep modal scrollable */
+    const scrollY = window.scrollY
+    document.body.style.position = "fixed"
+    document.body.style.top = `-${scrollY}px`
+    document.body.style.width = "100%"
     document.body.classList.add("modal-open")
     return () => {
       document.removeEventListener("keydown", onKey)
-      document.body.style.overflow = ""
+      document.body.style.position = ""
+      document.body.style.top = ""
+      document.body.style.width = ""
       document.body.classList.remove("modal-open")
+      window.scrollTo(0, scrollY)
     }
   }, [onClose])
 
-  // No createPortal — plain position:fixed covers full screen on all browsers
-  // including older Android WebView and Huawei Browser
   return (
     <div
       role="dialog"
       aria-modal="true"
       aria-label={title}
       style={{
+        /* Own stacking context — independent of page layout */
         position: "fixed",
         top: 0, left: 0, right: 0, bottom: 0,
         zIndex: 9999,
         display: "flex",
         flexDirection: "column",
         background: T.surface,
-        /* Force GPU layer — helps Android compositing */
         WebkitTransform: "translateZ(0)",
         transform: "translateZ(0)",
+        /* Ensure this element itself can scroll its children */
+        overflow: "hidden",
       }}
     >
-      {/* Fixed header */}
+      {/* ── Header — always visible ── */}
       <div style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "0 16px",
         paddingTop: "max(16px, env(safe-area-inset-top, 0px))",
-        paddingBottom: "14px",
+        paddingBottom: "12px",
         borderBottom: `1px solid ${T.border}`,
-        flexShrink: 0,
         background: T.surface,
+        /* Critical: must not shrink */
+        flexShrink: 0,
         minHeight: 56,
       }}>
-        <span className="dm" style={{ fontSize: 18, fontWeight: 700, color: T.textPrimary, letterSpacing: "-0.3px" }}>
+        <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary, letterSpacing: "-0.3px" }}>
           {title}
         </span>
-        <button
-          onClick={onClose}
-          aria-label="Close"
-          style={{
-            background: T.surfaceHigh,
-            border: `1px solid ${T.border}`,
-            borderRadius: 10,
-            width: 38, height: 38, minWidth: 38,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", flexShrink: 0,
-          }}
-        >
+        <button onClick={onClose} aria-label="Close" style={{
+          background: T.surfaceHigh, border: `1px solid ${T.border}`,
+          borderRadius: 10, width: 38, height: 38, minWidth: 38,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          cursor: "pointer", flexShrink: 0, touchAction: "manipulation",
+        }}>
           <Icon name="close" size={18} color={T.textSecondary} />
         </button>
       </div>
 
-      {/* Scrollable body — flex:1 + minHeight:0 mandatory for scroll */}
-      <div
-        ref={bodyRef}
-        style={{
-          flex: "1 1 0",
-          minHeight: 0,
-          overflowY: "scroll",
-          overflowX: "hidden",
-          WebkitOverflowScrolling: "touch",
-          overscrollBehavior: "contain",
-          touchAction: "pan-y",
-          padding: "16px",
-          paddingBottom: footer
-            ? "8px"
-            : "max(100px, calc(env(safe-area-inset-bottom, 0px) + 80px))",
-        }}
-      >
+      {/* ── Scrollable body ──
+           The ONLY correct way to get a scrollable flex child:
+           flex:1 (grow) + minHeight:0 (allow shrink below content size)
+           Without minHeight:0 the child pushes past the container.
+      ── */}
+      <div style={{
+        flex: "1 1 0%",
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        WebkitOverflowScrolling: "touch",
+        overscrollBehavior: "contain",
+        touchAction: "pan-y",
+        padding: "16px 16px",
+        /* Enough bottom space so last field clears the footer */
+        paddingBottom: footer ? "12px" : "max(80px, calc(env(safe-area-inset-bottom, 0px) + 60px))",
+        /* Explicit display block helps some Android WebViews */
+        display: "block",
+      }}>
         {children}
       </div>
 
-      {/* Sticky footer */}
+      {/* ── Sticky footer — always visible ── */}
       {footer && (
         <div style={{
           flexShrink: 0,
           padding: "12px 16px",
-          paddingBottom: "max(20px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
+          paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           borderTop: `1px solid ${T.border}`,
           background: T.surface,
-          boxShadow: "0 -4px 20px #00000018",
+          boxShadow: "0 -4px 16px rgba(0,0,0,0.15)",
         }}>
           {footer}
         </div>
