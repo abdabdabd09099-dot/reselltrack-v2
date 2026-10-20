@@ -7,13 +7,13 @@ import { apiExpenses, apiProducts } from '../utils/supabase.js'
 import { saveOffline } from '../utils/offlineQueue.js'
 import { RED, AMB, BLU, PUR, GRN, EXP_CATS } from '../data/constants.js'
 import { todayStr, fmtD, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, Skeleton, ProgressBar, Tabs, SecTitle } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 import { toast } from '../utils/toast.jsx'
 
 const Lbl = Field
 
 // ── Divider with label ────────────────────────────────────────────────────────
-const SectionDivider = ({ label, T }) => (
+const Divider = ({ label, T }) => (
   <div style={{ display:'flex', alignItems:'center', gap:10, margin:'4px 0 2px' }}>
     <div style={{ flex:1, height:1, background:T.border }} />
     <span style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.6 }}>{label}</span>
@@ -38,13 +38,13 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
   const isRestocking        = form.category === 'Restocking'
-  const selectedProduct     = (products||[]).find(p => p.id === form.restockProductId)
+  const selectedProduct     = products.find(p => p.id === form.restockProductId)
   const restockTotal        = +form.restockQty * +form.restockUnitPrice
   const newStockAfterRestock = selectedProduct ? selectedProduct.stock + +form.restockQty : 0
 
   // ── Select restocking product — auto-fill fields ──────────────────────────
   const selectRestockProduct = productId => {
-    const p = (products||[]).find(p => p.id === productId)
+    const p = products.find(p => p.id === productId)
     setForm(f => ({
       ...f,
       restockProductId: productId,
@@ -79,7 +79,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       let created
       if (isDemo) {
         created = demoApi.expenses.create(payload)
-      } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      } else if (!navigator.onLine) {
         created = await saveOffline('expenses', { ...payload, userId })
         toast.error('📡 Offline. Expense saved and will sync when reconnected.')
       } else {
@@ -87,7 +87,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       }
       // Update product stock on restock
       if (isRestocking && form.restockProductId && form.restockQty > 0 && !isDemo) {
-        const prod = (products||[]).find(p => p.id === form.restockProductId)
+        const prod = products.find(p => p.id === form.restockProductId)
         if (prod) {
           const newStock = prod.stock + +form.restockQty
           await apiProducts.update(form.restockProductId, { ...prod, stock: newStock })
@@ -109,8 +109,8 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
     } catch(e) { toast.error('Delete failed: ' + e.message) }
   }
 
-  const todayTot = (expenses||[]).filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)
-  const monthTot = (expenses||[]).filter(e => inRange(e.date, thisMonthRange())).reduce((a,e) => a + e.amount, 0)
+  const todayTot = expenses.filter(e => e.date === todayStr()).reduce((a,e) => a + e.amount, 0)
+  const monthTot = expenses.filter(e => inRange(e.date, thisMonthRange())).reduce((a,e) => a + e.amount, 0)
 
   return (
     <div className="fade-in">
@@ -132,7 +132,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
         <Tbl T={T} empty={L.noRecords}
           cols={[L.date, L.expDescription, L.expCategory, L.expenseAmount, L.notes, '']}
-          rows={(expenses||[]).map(e => [
+          rows={expenses.map(e => [
             <span style={{ fontSize:12, color:T.textSecondary, whiteSpace:'nowrap' }}>{fmtD(e.date)}</span>,
             <span style={{ fontWeight:500, color:T.textPrimary }}>{e.description}</span>,
             e.category ? <Badge color={e.category==='Restocking' ? GRN : PUR}>{e.category}</Badge> : <span style={{ color:T.textMuted }}>—</span>,
@@ -145,16 +145,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
 
       {/* ── Add Expense Modal ── */}
       {show && (
-        <Modal title={L.addExpenseTitle || 'Add Expense'} onClose={() => { setShow(false); setForm(blank) }} T={T}
-          footer={
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
-              <Btn onClick={saveExpense} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
-                {!saving && '✅ Save Expense'}
-              </Btn>
-            </div>
-          }
-        >
+        <Modal title={L.addExpenseTitle || 'Add Expense'} onClose={() => { setShow(false); setForm(blank) }} T={T}>
 
           {/* ── Category (always first) ── */}
           <Lbl label={L.expCategory} T={T}>
@@ -183,7 +174,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
               <Lbl label={L.restockingProduct || 'Product'} T={T}>
                 <select value={form.restockProductId} onChange={e => selectRestockProduct(e.target.value)} style={{ fontSize:13 }}>
                   <option value="">-- Choose product --</option>
-                  {(products||[]).map(p => (
+                  {products.map(p => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
@@ -198,7 +189,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
                     <InfoTile label="Sell Price" value={cur(selectedProduct.sellPrice)}       color={GRN} T={T} />
                   </div>
 
-                  <SectionDivider label="Restock details" T={T} />
+                  <Divider label="Restock details" T={T} />
 
                   {/* Qty + Unit Price side by side */}
                   <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginTop:10, marginBottom:10 }}>
@@ -214,7 +205,7 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
                     </Lbl>
                   </div>
 
-                  <SectionDivider label="Total expense" T={T} />
+                  <Divider label="Total expense" T={T} />
 
                   {/* Total Expenses — editable, auto-calc from qty × price */}
                   <div style={{ marginTop:10 }}>
@@ -277,7 +268,14 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
           </div>
 
           {/* ── Action buttons ── */}
-          
+          <div style={{ display:'flex', gap:8, marginTop:14 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setForm(blank) }} style={{ flex:1, justifyContent:'center' }}>
+              {L.cancel}
+            </Btn>
+            <Btn onClick={saveExp} disabled={saving} icon={isRestocking ? 'package' : 'download'} style={{ flex:2, justifyContent:'center' }}>
+              {saving ? 'Saving…' : isRestocking && form.restockProductId ? '✅ Save & Update Stock' : L.save}
+            </Btn>
+          </div>
         </Modal>
       )}
     </div>

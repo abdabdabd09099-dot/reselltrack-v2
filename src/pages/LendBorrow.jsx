@@ -8,7 +8,8 @@ import { useState, useMemo } from 'react'
 import { apiLending, apiBorrowing } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD } from '../utils/helpers.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, Divider } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat } from '../components/UI.jsx'
+import { Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
@@ -66,8 +67,8 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
     } catch (e) { toast.error(e.message) }
   }
 
-  const lp   = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const bp   = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const lp   = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const bp   = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
   const net  = lp - bp
   const list = tab === 'lending' ? lending : borrowing
 
@@ -120,16 +121,7 @@ export default function LendBorrow({ lending, setLending, borrowing, setBorrowin
 
       {/* ── Add entry modal ── */}
       {show && (
-        <Modal title={tab === 'lending' ? L.addLendingEntry : L.addBorrowingEntry} onClose={() => setShow(false)} T={T}
-          footer={
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn outline color={T.textSecondary} onClick={() => setShow(false)} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
-              <Btn onClick={saveEntry} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
-                {!saving && '✅ Save Entry'}
-              </Btn>
-            </div>
-          }
-        >
+        <Modal title={tab === 'lending' ? L.addLendingEntry : L.addBorrowingEntry} onClose={() => setShow(false)} T={T}>
           <div style={{ display: 'grid', gap: 14 }}>
             <Lbl label={L.personName + ' *'} T={T}>
               <input value={form.personName} onChange={e => sf('personName', e.target.value)} />

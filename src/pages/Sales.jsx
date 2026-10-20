@@ -89,7 +89,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const [form, setForm] = useState(mkBlank())
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
-  const rowTotal     = (form.items||[]).reduce((a,i) => a + ((i.qty||0) * (i.unitPrice||0)), 0)
+  const rowTotal     = form.items.reduce((a,i) => a + (i.qty * i.unitPrice), 0)
   const rowPaid1     = +form.amountPaid  || 0
   const rowPaid2     = +form.splitAmount || 0
   const rowTotalPaid = rowPaid1 + rowPaid2
@@ -102,7 +102,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       const items = [...f.items]
       items[idx] = { ...items[idx], [key]: val }
       if (key === 'productId') {
-        const p = (products||[]).find(p => p.id === val)
+        const p = products.find(p => p.id === val)
         if (p) {
           if (p.stock <= 0) {
             setItemWarn(`⛔ "${p.name}" is out of stock.`)
@@ -121,7 +121,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         }
       }
       if (key === 'qty') {
-        const p = (products||[]).find(p => p.id === items[idx].productId)
+        const p = products.find(p => p.id === items[idx].productId)
         if (p && val > p.stock) {
           setItemWarn(`⚠️ Only ${p.stock} units of "${p.name}" available.`)
           items[idx].qty = p.stock
@@ -138,7 +138,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     setForm({
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
-      items: (s.items||[]).map(i => ({ ...i, variant: i.variant || '' })),
+      items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
       paymentMethod: s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'cash' : 'transfer') : s.paymentMethod,
       amountPaid:    s.paymentMethod === 'split' ? String(s.cashPaid || s.amountPaid) : String(s.amountPaid),
       splitMethod:   s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'transfer' : 'cash') : 'transfer',
@@ -158,12 +158,12 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       } else {
         await sb.from('sale_items').delete().eq('sale_id', s.id)
         await sb.from('sales').delete().eq('id', s.id)
-        for (const item of (s.items||[])) {
-          const prod = (products||[]).find(p => p.id === item.productId)
+        for (const item of s.items) {
+          const prod = products.find(p => p.id === item.productId)
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
         }
         setProducts(ps => ps.map(p => {
-          const it = (s.items||[]).find(i => i.productId === p.id)
+          const it = s.items.find(i => i.productId === p.id)
           return it ? { ...p, stock: p.stock + it.qty } : p
         }))
         setSales(ss => ss.filter(x => x.id !== s.id))
@@ -178,9 +178,9 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     const validItems = form.items.filter(i => i.productId)
     if (!validItems.length) return toast.error('Add at least one product.')
     for (const item of validItems) {
-      const p = (products||[]).find(p => p.id === item.productId)
+      const p = products.find(p => p.id === item.productId)
       if (!p) continue
-      const alreadyHeld = editSale ? ((editSale.items||[]).find(oi => oi.productId === item.productId)?.qty || 0) : 0
+      const alreadyHeld = editSale ? (editSale.items.find(oi => oi.productId === item.productId)?.qty || 0) : 0
       if (item.qty > p.stock + alreadyHeld) return toast.error(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
     }
     setSaving(true)
@@ -206,11 +206,11 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       if (editSale) {
         for (const oi of editSale.items) {
-          const p = (products||[]).find(p => p.id === oi.productId)
+          const p = products.find(p => p.id === oi.productId)
           if (p) await apiProducts.update(oi.productId, { ...p, stock: p.stock + oi.qty })
         }
         for (const ni of validItems) {
-          const p = (products||[]).find(p => p.id === ni.productId)
+          const p = products.find(p => p.id === ni.productId)
           if (p) await apiProducts.update(ni.productId, { ...p, stock: Math.max(0, p.stock - ni.qty) })
         }
         setProducts(ps => ps.map(p => {
@@ -232,14 +232,14 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
         if (isDemo) {
           created = demoApi.sales.create(sale)
           if (!created) { onDemoLimit?.(); setSaving(false); return }
-        } else if (typeof navigator === 'undefined' || !navigator.onLine) {
+        } else if (!navigator.onLine) {
           created = await saveOffline('sales', { ...sale, userId })
           toast.info('📡 Offline — sale saved locally and will sync when reconnected.')
         } else {
           created = await apiSales.create(sale, userId)
         }
         for (const item of validItems) {
-          const prod = (products||[]).find(p => p.id === item.productId)
+          const prod = products.find(p => p.id === item.productId)
           if (prod) await apiProducts.update(item.productId, { ...prod, stock: Math.max(0, prod.stock - item.qty) })
         }
         setProducts(ps => ps.map(p => { const it = validItems.find(i => i.productId === p.id); return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p }))
@@ -271,18 +271,18 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const resetFilters = () => { setSrch(''); setFilterSt('all'); setFilterPeriod('all'); setFilterProduct(''); setFilterMethod('all') }
   const hasFilter    = srch || filterSt !== 'all' || filterPeriod !== 'all' || filterProduct || filterMethod !== 'all'
   const range        = getPeriodRange()
-  const filtered     = (sales||[]).filter(s => {
+  const filtered     = sales.filter(s => {
     if (filterSt !== 'all' && s.status.toLowerCase() !== filterSt) return false
     if (filterMethod !== 'all' && s.paymentMethod !== filterMethod) return false
     if (range && !inRange(s.date, range)) return false
-    if (filterProduct && !(s.items||[]).some(i => i.productName === filterProduct)) return false
+    if (filterProduct && !s.items.some(i => i.productName === filterProduct)) return false
     if (srch) { const q = srch.toLowerCase(); if (!s.customerName.toLowerCase().includes(q)) return false }
     return true
   })
 
-  const productNames = [...new Set((sales||[]).flatMap(s => (s.items||[]).map(i => i.productName)))].filter(Boolean).sort()
-  const todayRev     = (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
-  const totalUncol   = (sales||[]).reduce((a,s) => a + s.balance, 0)
+  const productNames = [...new Set(sales.flatMap(s => s.items.map(i => i.productName)))].filter(Boolean).sort()
+  const todayRev     = sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+  const totalUncol   = sales.reduce((a,s) => a + s.balance, 0)
 
   return (
     <div className="fade-in">
@@ -303,8 +303,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       <div className="stat-grid">
         <Stat label={L.todayRevenue} value={cur(todayRev)}   color={GRN} icon="trending-up"  T={T} />
         <Stat label={L.uncollected}  value={cur(totalUncol)} color={AMB} icon="clock"         T={T} />
-        <Stat label={L.transactions} value={(sales||[]).length}    color={BLU} icon="sales"         T={T} />
-        <Stat label={L.paid}         value={(sales||[]).filter(s => s.status==='Paid').length} color={T.accent} icon="check" T={T} />
+        <Stat label={L.transactions} value={sales.length}    color={BLU} icon="sales"         T={T} />
+        <Stat label={L.paid}         value={sales.filter(s => s.status==='Paid').length} color={T.accent} icon="check" T={T} />
       </div>
 
       {/* ── Edit notice ── */}
@@ -361,7 +361,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       <div style={{ background:T.surface, border:`1px solid ${T.border}`, borderRadius:12, padding:16 }}>
         <div className="dm" style={{ fontWeight:700, fontSize:14, color:T.textPrimary, marginBottom:12 }}>
           Sales Records
-          {filtered.length !== (sales||[]).length && <span style={{ fontWeight:400, color:T.textSecondary, fontSize:12, marginLeft:8 }}>({filtered.length} of {(sales||[]).length})</span>}
+          {filtered.length !== sales.length && <span style={{ fontWeight:400, color:T.textSecondary, fontSize:12, marginLeft:8 }}>({filtered.length} of {sales.length})</span>}
         </div>
         <Tbl T={T} empty={L.noRecords}
           cols={[L.dateTime, L.customer, L.items, L.total, L.paid||'Paid', L.balance, L.method, L.status, 'Actions']}
@@ -371,7 +371,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               <div style={{ fontWeight:500, color:T.textPrimary }}>{s.customerName}</div>
               {s.contact && <div style={{ fontSize:11, color:T.textSecondary }}>{s.contact}</div>}
             </div>,
-            <div>{(s.items||[]).map((i,x) => <div key={x} style={{ fontSize:11, color:T.textSecondary }}>{i.productName} ×{i.qty}{i.variant?` (${i.variant})`:''}</div>)}</div>,
+            <div>{s.items.map((i,x) => <div key={x} style={{ fontSize:11, color:T.textSecondary }}>{i.productName} ×{i.qty}{i.variant?` (${i.variant})`:''}</div>)}</div>,
             <span className="mono" style={{ fontWeight:600, color:T.textPrimary }}>{cur(s.totalAmount)}</span>,
             <span className="mono" style={{ color:GRN }}>{cur(s.amountPaid)}</span>,
             <span className="mono" style={{ color:s.balance>0?RED:T.textMuted }}>{s.balance>0?cur(s.balance):'—'}</span>,
@@ -382,8 +382,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                   <Badge color={BLU}>📲 {cur(s.transferPaid||0)}</Badge>
                 </>
               ) : (
-                <Badge color={s.paymentMethod==='transfer'?BLU:GRN}>
-                  {s.paymentMethod==='transfer'?'📲 Transfer':'💵 Cash'}
+                <Badge color={s.paymentMethod==='cash'?GRN:BLU}>
+                  {s.paymentMethod==='cash'?'💵 Cash':'📲 Transfer'}
                 </Badge>
               )}
             </div>,
@@ -409,36 +409,19 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
       {/* ── Sale modal ── */}
       {show && (
-        <Modal
-          title={editSale ? '✏️ Edit Sale' : L.recordNewSale}
-          onClose={() => { setShow(false); setEditSale(null); setItemWarn('') }}
-          wide T={T}
-          footer={
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn outline color={T.textSecondary}
-                onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }}
-                style={{ flex:1, justifyContent:'center', minHeight:52 }}>
-                Cancel
-              </Btn>
-              <Btn onClick={saveSale} disabled={saving} loading={saving}
-                style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15, fontWeight:700 }}>
-                {!saving && (editSale ? '💾 Save Changes' : '✅ Record Sale')}
-              </Btn>
-            </div>
-          }
-        >
+        <Modal title={editSale ? '✏️ Edit Sale' : L.recordNewSale} onClose={() => { setShow(false); setEditSale(null); setItemWarn('') }} wide T={T}>
           {editSale && (
             <div style={{ background:AMB+'22', border:`1px solid ${AMB}44`, borderRadius:8, padding:'8px 12px', marginBottom:10, fontSize:12, color:AMB }}>
               ⚠️ Editing sale — stock will be recalculated.
             </div>
           )}
           {/* Date + Time */}
-          <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
             <Lbl label={L.date} T={T}><input type="date" value={form.date} onChange={e => sf('date',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
             <Lbl label={L.time} T={T}><input type="time" value={form.time} onChange={e => sf('time',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
           </div>
           {/* Customer */}
-          <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:10 }}>
             <Lbl label={L.customerName+' *'} T={T}><input value={form.customerName} onChange={e => sf('customerName',e.target.value)} placeholder="Customer name" style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
             <Lbl label={L.contact} T={T}><input value={form.contact} onChange={e => sf('contact',e.target.value)} placeholder="Phone" style={{ fontSize:13, padding:'7px 9px' }} /></Lbl>
           </div>
@@ -452,10 +435,10 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>{L.product} *</label>
                 <select value={item.productId} onChange={e => updItem(idx,'productId',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }}>
                   <option value="">{L.selectProduct}</option>
-                  {(products||[]).map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
+                  {products.map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
                 </select>
               </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 72px 60px 30px', gap:6, alignItems:'flex-end', marginTop:6 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 32px', gap:6, alignItems:'flex-end' }}>
                 <div>
                   <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>Variant</label>
                   <input value={item.variant||''} onChange={e => updItem(idx,'variant',e.target.value)} placeholder="Size, colour..." style={{ fontSize:12, padding:'6px 8px' }} />
@@ -488,7 +471,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:0.6, marginBottom:8 }}>Payment</div>
 
             {/* Primary payment method + amount */}
-            <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8, marginBottom:8 }}>
               <div>
                 <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>Method</label>
                 <div style={{ display:'flex', gap:6 }}>
@@ -523,7 +506,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 </div>
 
                 {/* Second payment method + amount */}
-                <div className="g2" style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                   <div>
                     <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:4, fontWeight:600, textTransform:'uppercase' }}>2nd Method (same OK)</label>
                     <div style={{ display:'flex', gap:6 }}>
@@ -609,23 +592,19 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           <Lbl label={L.notes+' (optional)'} T={T}>
             <textarea value={form.notes} onChange={e => sf('notes',e.target.value)} rows={2} placeholder="Any notes..." style={{ fontSize:13, padding:'7px 9px', resize:'none' }} />
           </Lbl>
+          {/* Buttons */}
+          <div style={{ display:'flex', gap:8, marginTop:14 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShow(false); setEditSale(null); setItemWarn('') }} style={{ flex:1, justifyContent:'center' }}>Cancel</Btn>
+            <Btn onClick={saveSale} disabled={saving} style={{ flex:2, justifyContent:'center' }}>
+              {saving ? 'Saving…' : editSale ? '💾 Save Changes' : '✅ Record Sale'}
+            </Btn>
+          </div>
         </Modal>
       )}
 
       {/* ── Daily Cash Recording Modal ── */}
       {showCashModal && (
-        <Modal title={L.recordCash || 'Record Daily Cash'} onClose={() => { setShowCashModal(false); setCashAmount(''); setCashNote(''); setCashSaved(false) }} T={T}
-          footer={
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn outline color={T.textSecondary} onClick={() => { setShowCashModal(false); setCashAmount(''); setCashNote('') }} style={{ flex:1, justifyContent:'center', minHeight:52 }}>
-                Cancel
-              </Btn>
-              <Btn onClick={saveDailyCash} disabled={!cashAmount || cashSaved} color={GRN} icon="check" style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
-                {cashSaved ? '✅ Saved!' : 'Save Cash Record'}
-              </Btn>
-            </div>
-          }
-        >
+        <Modal title={L.recordCash || 'Record Daily Cash'} onClose={() => { setShowCashModal(false); setCashAmount(''); setCashNote(''); setCashSaved(false) }} T={T}>
           <p style={{ fontSize:13, color:T.textSecondary, marginBottom:16, lineHeight:1.6 }}>
             Count your physical cash at end of day and record the total. It will be compared with your calculated sales in Reports.
           </p>
@@ -634,10 +613,10 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
           <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:10, padding:'12px 14px', marginBottom:16 }}>
             <div style={{ fontSize:10, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>Today's Recorded Sales ({todayStr()})</div>
             <div className="mono" style={{ fontSize:22, fontWeight:800, color:T.accent }}>
-              {cur((sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
+              {cur(sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0))}
             </div>
             <div style={{ fontSize:11, color:T.textMuted, marginTop:3 }}>
-              {(sales||[]).filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
+              {sales.filter(s => s.date.slice(0,10) === todayStr()).length} sale(s) recorded today
             </div>
           </div>
 
@@ -653,8 +632,8 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 placeholder="Enter total cash you counted..."
                 style={{ width:'100%', fontSize:20, fontWeight:800, padding:'12px 14px', boxSizing:'border-box',
                   borderColor: cashAmount ? (
-                    parseFloat(cashAmount) === (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
-                    ? GRN : parseFloat(cashAmount) > (sales||[]).filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    parseFloat(cashAmount) === sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
+                    ? GRN : parseFloat(cashAmount) > sales.filter(s => s.date.slice(0,10) === todayStr()).reduce((a,s) => a + s.amountPaid, 0)
                     ? BLU : RED
                   ) : T.border }}
               />
@@ -662,7 +641,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
 
             {/* Live difference preview */}
             {cashAmount && (() => {
-              const daySales = (sales||[]).filter(s => s.date.slice(0,10) === todayStr())
+              const daySales = sales.filter(s => s.date.slice(0,10) === todayStr())
               const calc     = daySales.reduce((a,s) => a + s.amountPaid, 0)
               const actual   = parseFloat(cashAmount) || 0
               const diff     = actual - calc
@@ -703,7 +682,14 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
             </div>
           </div>
 
-
+          <div style={{ display:'flex', gap:8 }}>
+            <Btn outline color={T.textSecondary} onClick={() => { setShowCashModal(false); setCashAmount(''); setCashNote('') }} style={{ flex:1, justifyContent:'center' }}>
+              Cancel
+            </Btn>
+            <Btn onClick={saveDailyCash} disabled={!cashAmount || cashSaved} color={GRN} icon="check" style={{ flex:2, justifyContent:'center' }}>
+              {cashSaved ? '✅ Saved!' : 'Save Cash Record'}
+            </Btn>
+          </div>
         </Modal>
       )}
     </div>

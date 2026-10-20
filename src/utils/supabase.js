@@ -106,7 +106,7 @@ export const apiSales = {
       paymentMethod: s.payment_method,
       status:        s.status,
       notes:         s.notes,
-      items: (Array.isArray(s.sale_items) ? s.sale_items : []).map(i => ({
+      items: (s.sale_items || []).map(i => ({
         productId:   i.product_id,
         productName: i.product_name,
         qty:         safeNum(i.qty, 1),

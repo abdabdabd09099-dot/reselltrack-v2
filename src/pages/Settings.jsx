@@ -123,8 +123,8 @@ export default function Settings({
   const [exportMsg,  setExportMsg]  = useState('')
   const currObj   = CURRENCIES.find(c => c.code === draft.currencyCode) || CURRENCIES[0]
   const previewCur = n => currObj.symbol + Number(n || 0).toLocaleString('en', { minimumFractionDigits: 2 })
-  const allRev    = (sales||[]).reduce((a, s) => a + s.amountPaid, 0)
-  const allExp    = (expenses||[]).reduce((a, e) => a + e.amount, 0)
+  const allRev    = sales.reduce((a, s) => a + s.amountPaid, 0)
+  const allExp    = expenses.reduce((a, e) => a + e.amount, 0)
 
   const handleExportExcel = async () => {
     setExporting(true); setExportMsg('')

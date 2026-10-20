@@ -25,8 +25,7 @@ import PriceCalculator from './pages/PriceCalculator.jsx'
 import { LoadingScreen, NetworkErrorScreen, OfflineBanner } from './components/Loader.jsx'
 import { Icon, Logo, SessionWarning } from './components/UI.jsx'
 import InstallPrompt    from './components/InstallPrompt.jsx'
-import { ToastProvider }  from './utils/toast.jsx'
-import { ErrorBoundary }  from './components/ErrorBoundary.jsx'
+import { ToastProvider } from './utils/toast.jsx'
 import DemoLimitPrompt  from './components/DemoLimitPrompt.jsx'
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -291,8 +290,7 @@ export default function App() {
             </div>
           )}
 
-          <div className="content" style={{ touchAction: "pan-y" }}>
-            <ErrorBoundary T={T} pageName={page}>
+          <div className="content">
             {/* Demo top banner */}
             {isDemo && (
               <div style={{ background: '#F5A62318', border: '1px solid #F5A62344', borderRadius: 10, padding: '10px 16px', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
@@ -314,7 +312,6 @@ export default function App() {
             {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
             {page === 'calculator' && <PriceCalculator T={T} cur={cur} products={P} />}
             {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} user={user} onSignOut={handleSignOut} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
-            </ErrorBoundary>
           </div>
         </div>
 

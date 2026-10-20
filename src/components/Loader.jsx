@@ -138,8 +138,7 @@ export function LoadingScreen({ message, submessage }) {
 
   return (
     <>
-      <style>{CSS}
-</style>
+      <style>{CSS}</style>
       <div style={{
         position: 'fixed', inset: 0,
         background: 'linear-gradient(160deg, #0D0F14 60%, #161A24 100%)',
@@ -215,8 +214,7 @@ export function NetworkErrorScreen({ onRetry, message }) {
 
   return (
     <>
-      <style>{CSS}
-</style>
+      <style>{CSS}</style>
       <div style={{
         position: 'fixed', inset: 0,
         background: 'linear-gradient(160deg, #0D0F14 60%, #1a0f0f 100%)',
@@ -295,8 +293,7 @@ export function OfflineBanner() {
 
   return (
     <>
-      <style>{CSS}
-</style>
+      <style>{CSS}</style>
       <div className="rt-fade-up" style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
         background: online ? '#22C55E' : '#EF4444',

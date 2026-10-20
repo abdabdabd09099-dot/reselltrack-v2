@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
-import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn, Empty, AlertBanner, ProgressBar, Tabs } from '../components/UI.jsx'
+import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn } from '../components/UI.jsx'
 import { dailyCash } from '../utils/dailyCash.js'
 
 export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
@@ -37,15 +37,15 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
   }
 
   // ── Filtered data ──────────────────────────────────────────────────────────
-  const filtSales   = (sales||[]).filter(s => inRange(s.date, range))
-  const filtExp     = (expenses||[]).filter(e => inRange(e.date, range))
+  const filtSales   = sales.filter(s => inRange(s.date, range))
+  const filtExp     = expenses.filter(e => inRange(e.date, range))
   const totalRev    = filtSales.reduce((a, s) => a + s.amountPaid, 0)
   const totalCalc   = filtSales.reduce((a, s) => a + s.totalAmount, 0)  // calculated total
   const totalExp    = filtExp.reduce((a, e) => a + e.amount, 0)
   const netProfit   = totalRev - totalExp
   const totalUncol  = filtSales.reduce((a, s) => a + s.balance, 0)
-  const lendPend    = (lending||[]).filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
-  const borrPend    = (borrowing||[]).filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
+  const lendPend    = lending.filter(l => l.status === 'Pending').reduce((a, l) => a + l.amount, 0)
+  const borrPend    = borrowing.filter(b => b.status === 'Pending').reduce((a, b) => a + b.amount, 0)
   // Include split payments in cash/transfer totals
   const cashTotal = filtSales.reduce((a, s) => {
     if (s.paymentMethod === 'cash')     return a + s.amountPaid
@@ -57,14 +57,14 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     if (s.paymentMethod === 'split')    return a + (s.transferPaid || 0)
     return a
   }, 0)
-  const totalUnits      = filtSales.flatMap(s => s.items||[]).reduce((a, i) => a + (i.qty||0), 0)
+  const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
 
 
 
   // ── Products performance — memoised ───────────────────────────────────────
   const prodList = useMemo(() => {
     const map = {}
-    filtSales.forEach(s => (s.items||[]).forEach(item => {
+    filtSales.forEach(s => s.items.forEach(item => {
       if (!map[item.productName]) map[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
       map[item.productName].units   += item.qty
       map[item.productName].revenue += item.qty * item.unitPrice
@@ -78,8 +78,8 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     const days = []; const start = new Date(range[0]); const end = new Date(range[1])
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const ds  = d.toISOString().slice(0, 10)
-      const rev = (sales||[]).filter(s => s.date.slice(0, 10) === ds).reduce((a, s) => a + s.amountPaid, 0)
-      const exp = (expenses||[]).filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0)
+      const rev = sales.filter(s => s.date.slice(0, 10) === ds).reduce((a, s) => a + s.amountPaid, 0)
+      const exp = expenses.filter(e => e.date === ds).reduce((a, e) => a + e.amount, 0)
       days.push({ date: fmtShort(ds), Revenue: rev, Expenses: exp, Profit: rev - exp })
     }
     return { series: days, multiDay: days.length > 1 }
@@ -98,7 +98,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
   // ── Record and compare daily cash flow ────────────────────────────────────
   const recordCashFlow = () => {
-    const daySales   = (sales||[]).filter(s => s.date.slice(0,10) === cashFlowDate)
+    const daySales   = sales.filter(s => s.date.slice(0,10) === cashFlowDate)
     const calculated = daySales.reduce((a,s) => a + s.amountPaid, 0)
     // Read actual cash from dailyCash utility (saved via Sales page 'Record Cash' button)
     const saved  = dailyCash.getAll()
@@ -155,16 +155,14 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
       {/* ── Period selector ── */}
       <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 18, marginBottom: 16 }}>
-        <Tabs
-          active={period}
-          onChange={setPeriod}
-          T={T}
-          tabs={[
-            { id:'daily',   label: L.daily   },
-            { id:'weekly',  label: L.weekly  },
-            { id:'monthly', label: L.monthly },
-          ]}
-        />
+        <div style={{ display: 'flex', marginBottom: 14, background: T.bg, borderRadius: 8, overflow: 'hidden', width: 'fit-content', border: `1px solid ${T.border}` }}>
+          {[[L.daily, 'daily'], [L.weekly, 'weekly'], [L.monthly, 'monthly']].map(([lbl, p]) => (
+            <button key={p} onClick={() => setPeriod(p)}
+              style={{ padding: '9px 20px', background: period === p ? T.accent : 'transparent', color: period === p ? '#fff' : T.textSecondary, fontWeight: 600, border: 'none', fontSize: 13, minWidth: 80, cursor: 'pointer' }}>
+              {lbl}
+            </button>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <span style={{ color: T.textSecondary, fontSize: 13 }}>{L.period}:</span>
           {period === 'daily'   && <input type="date"  value={cDate}  onChange={e => setCDate(e.target.value)}  style={{ width: 180 }} />}
@@ -556,7 +554,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
 
                     {/* Items & units */}
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 200 }}>
-                      {(s.items||[]).map((item, x) => (
+                      {s.items.map((item, x) => (
                         <div key={x} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: x < s.items.length - 1 ? 4 : 0 }}>
                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: CHART_PAL[x % CHART_PAL.length], flexShrink: 0 }} />
                           <span style={{ fontSize: 12, color: T.textPrimary }}>{item.productName}</span>
@@ -569,7 +567,7 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
                       ))}
                       <div style={{ marginTop: 5, paddingTop: 4, borderTop: `1px dashed ${T.border}`, display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: 10, color: T.textMuted, fontWeight: 600 }}>
-                          {(s.items||[]).reduce((a, i) => a + (i.qty||0), 0)} unit{(s.items||[]).reduce((a, i) => a + (i.qty||0), 0) !== 1 ? 's' : ''}
+                          {s.items.reduce((a, i) => a + i.qty, 0)} unit{s.items.reduce((a, i) => a + i.qty, 0) !== 1 ? 's' : ''}
                         </span>
                       </div>
                     </td>

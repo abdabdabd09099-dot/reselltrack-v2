@@ -6,7 +6,7 @@ import { toast } from '../utils/toast.jsx'
 import { useState, useMemo } from 'react'
 import { apiProducts } from '../utils/supabase.js'
 import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
-import { Badge, Btn, Modal, Field, Stat, Tbl, Icon, Empty, AlertBanner, ProgressBar } from '../components/UI.jsx'
+import { Badge, Btn, Modal, Field, Stat, Tbl } from '../components/UI.jsx'
 
 const Lbl = Field
 
@@ -59,11 +59,11 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
     catch (e) { toast.error('Delete failed: ' + e.message) }
   }
 
-  const list     = (products||[]).filter(p =>
+  const list     = products.filter(p =>
     p.name.toLowerCase().includes(srch.toLowerCase()) ||
     (p.category || '').toLowerCase().includes(srch.toLowerCase())
   )
-  const totalVal = (products||[]).reduce((a, p) => a + (p.buyPrice * p.stock), 0)
+  const totalVal = products.reduce((a, p) => a + (p.buyPrice * p.stock), 0)
 
   return (
     <div className="fade-in">
@@ -78,8 +78,8 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
       <div className="stat-grid">
         <Stat label={L.totalProducts} value={products.length}                                     color={T.accent} icon="📦" T={T} />
         <Stat label={L.stockValue}    value={cur(totalVal)}                                       color={BLU}      icon="💼" T={T} />
-        <Stat label={L.lowStock}      value={(products||[]).filter(p => p.stock <= 3 && p.stock > 0).length} color={AMB} icon="alert" T={T} />
-        <Stat label={L.outOfStock}    value={(products||[]).filter(p => p.stock === 0).length}          color={RED}      icon="error" T={T} />
+        <Stat label={L.lowStock}      value={products.filter(p => p.stock <= 3 && p.stock > 0).length} color={AMB} icon="⚠️" T={T} />
+        <Stat label={L.outOfStock}    value={products.filter(p => p.stock === 0).length}          color={RED}      icon="❌" T={T} />
       </div>
 
       {/* ── Table ── */}
@@ -100,10 +100,7 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
             p.category ? <Badge color={PUR}>{p.category}</Badge> : <span style={{ color: T.textMuted }}>—</span>,
             <span className="mono" style={{ fontSize: 12, color: T.textPrimary }}>{cur(p.buyPrice)}</span>,
             <span className="mono" style={{ color: GRN, fontWeight: 600 }}>{cur(p.sellPrice)}</span>,
-            <div style={{ minWidth: 60 }}>
-              <span className="mono" style={{ fontWeight:700, color:p.stock===0?RED:p.stock<=3?AMB:GRN }}>{p.stock}</span>
-              <ProgressBar value={p.stock} max={Math.max(p.stock+5,10)} color={p.stock===0?RED:p.stock<=3?AMB:GRN} T={T} height={3} />
-            </div>,
+            <span className="mono" style={{ fontWeight: 600, color: T.textPrimary }}>{p.stock}</span>,
             p.stock === 0
               ? <Badge color={RED}>{L.outOfStock}</Badge>
               : p.stock <= 3
@@ -119,16 +116,7 @@ export default function Products({ products, setProducts, userId, T, L, cur, isD
 
       {/* ── Add / Edit modal ── */}
       {show && (
-        <Modal title={editId ? L.editProduct : L.addNewProduct} onClose={() => setShow(false)} T={T}
-          footer={
-            <div style={{ display:'flex', gap:10 }}>
-              <Btn outline color={T.textSecondary} onClick={() => setShow(false)} style={{ flex:1, justifyContent:'center', minHeight:52 }}>Cancel</Btn>
-              <Btn onClick={saveProduct} disabled={saving} loading={saving} style={{ flex:2, justifyContent:'center', minHeight:52, fontSize:15 }}>
-                {!saving && (editId ? '💾 Save Changes' : '✅ Add Product')}
-              </Btn>
-            </div>
-          }
-        >
+        <Modal title={editId ? L.editProduct : L.addNewProduct} onClose={() => setShow(false)} T={T}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }} className="g2">
             <Lbl label={L.productName + ' *'} col="1/-1" T={T}>
               <input value={form.name} onChange={e => sf('name', e.target.value)} />
