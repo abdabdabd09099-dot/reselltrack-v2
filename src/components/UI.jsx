@@ -204,7 +204,6 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
   useEffect(() => {
     const onKey = (e) => { if (e.key === "Escape") onClose() }
     document.addEventListener("keydown", onKey)
-    /* Freeze background scroll but keep modal scrollable */
     const scrollY = window.scrollY
     document.body.style.position = "fixed"
     document.body.style.top = `-${scrollY}px`
@@ -220,40 +219,33 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
     }
   }, [onClose])
 
+  /* Footer height constant — scroll body reserves this space at the bottom */
+  const FOOTER_H = footer ? 80 : 0
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={title}
-      style={{
-        /* Own stacking context — independent of page layout */
-        position: "fixed",
-        top: 0, left: 0, right: 0, bottom: 0,
-        zIndex: 9999,
-        display: "flex",
-        flexDirection: "column",
-        background: T.surface,
-        WebkitTransform: "translateZ(0)",
-        transform: "translateZ(0)",
-        /* Ensure this element itself can scroll its children */
-        overflow: "hidden",
-      }}
-    >
-      {/* ── Header — always visible ── */}
+    <div style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      zIndex: 9999,
+      background: T.surface,
+      display: "flex",
+      flexDirection: "column",
+      WebkitTransform: "translateZ(0)",
+      transform: "translateZ(0)",
+    }} role="dialog" aria-modal="true" aria-label={title}>
+
+      {/* ── Header — fixed at top ── */}
       <div style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
+        display: "flex", alignItems: "center", justifyContent: "space-between",
         padding: "0 16px",
-        paddingTop: "max(16px, env(safe-area-inset-top, 0px))",
+        paddingTop: "max(14px, env(safe-area-inset-top, 0px))",
         paddingBottom: "12px",
         borderBottom: `1px solid ${T.border}`,
         background: T.surface,
-        /* Critical: must not shrink */
         flexShrink: 0,
-        minHeight: 56,
+        minHeight: 54,
+        zIndex: 1,
       }}>
-        <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary, letterSpacing: "-0.3px" }}>
+        <span className="dm" style={{ fontSize: 17, fontWeight: 700, color: T.textPrimary }}>
           {title}
         </span>
         <button onClick={onClose} aria-label="Close" style={{
@@ -266,11 +258,7 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         </button>
       </div>
 
-      {/* ── Scrollable body ──
-           The ONLY correct way to get a scrollable flex child:
-           flex:1 (grow) + minHeight:0 (allow shrink below content size)
-           Without minHeight:0 the child pushes past the container.
-      ── */}
+      {/* ── Scroll body — takes all remaining space ── */}
       <div style={{
         flex: "1 1 0%",
         minHeight: 0,
@@ -279,16 +267,14 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
         WebkitOverflowScrolling: "touch",
         overscrollBehavior: "contain",
         touchAction: "pan-y",
-        padding: "16px 16px",
-        /* Enough bottom space so last field clears the footer */
-        paddingBottom: footer ? "12px" : "max(80px, calc(env(safe-area-inset-bottom, 0px) + 60px))",
-        /* Explicit display block helps some Android WebViews */
-        display: "block",
+        padding: "16px",
+        /* Reserve space so last field is not hidden behind footer */
+        paddingBottom: `max(${FOOTER_H + 32}px, calc(env(safe-area-inset-bottom, 0px) + ${FOOTER_H + 24}px))`,
       }}>
         {children}
       </div>
 
-      {/* ── Sticky footer — always visible ── */}
+      {/* ── Footer — position:sticky bottom so it is always visible ── */}
       {footer && (
         <div style={{
           flexShrink: 0,
@@ -296,7 +282,9 @@ export const Modal = ({ title, onClose, children, footer, wide, T }) => {
           paddingBottom: "max(16px, calc(env(safe-area-inset-bottom, 0px) + 12px))",
           borderTop: `1px solid ${T.border}`,
           background: T.surface,
-          boxShadow: "0 -4px 16px rgba(0,0,0,0.15)",
+          boxShadow: "0 -6px 24px rgba(0,0,0,0.12)",
+          /* Ensure footer is always at the visual bottom */
+          zIndex: 1,
         }}>
           {footer}
         </div>
