@@ -13,8 +13,9 @@ import { CHART_PAL, GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtShort, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Stat, SecTitle, ChartTip, PieLabel, Icon, Btn } from '../components/UI.jsx'
 import { dailyCash } from '../utils/dailyCash.js'
+import { pricesFor } from '../utils/stock.js'
 
-export default function Reports({ sales, expenses, lending, borrowing, T, L, cur }) {
+export default function Reports({ sales, expenses, lending, borrowing, products, variants, T, L, cur }) {
   const [period, setPeriod] = useState('daily')
   const [cDate,  setCDate]  = useState(todayStr())
   const [cWeek,  setCWeek]  = useState(thisWeekRange()[0])
@@ -57,14 +58,14 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     if (s.paymentMethod === 'split')    return a + (s.transferPaid || 0)
     return a
   }, 0)
-  const totalUnits      = filtSales.flatMap(s => s.items).reduce((a, i) => a + i.qty, 0)
+  const totalUnits      = filtSales.flatMap(s => s.items || []).reduce((a, i) => a + i.qty, 0)
 
 
 
   // ── Products performance — memoised ───────────────────────────────────────
   const prodList = useMemo(() => {
     const map = {}
-    filtSales.forEach(s => s.items.forEach(item => {
+    filtSales.forEach(s => (s.items || []).forEach(item => {
       if (!map[item.productName]) map[item.productName] = { name: item.productName, units: 0, revenue: 0, txCount: 0 }
       map[item.productName].units   += item.qty
       map[item.productName].revenue += item.qty * item.unitPrice
@@ -72,6 +73,39 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
     }))
     return Object.values(map).sort((a, b) => b.revenue - a.revenue)
   }, [filtSales])
+
+  // ── Real profit: sale value minus what the goods cost WHEN THEY WERE SOLD ───
+  const profit = useMemo(() => {
+    const prodById = new Map((products || []).map(p => [p.id, p]))
+    const varById  = new Map((variants || []).map(v => [v.id, v]))
+    let revenue = 0, cogs = 0, estimated = 0
+    const rows = new Map()
+    filtSales.forEach(s => (s.items || []).forEach(i => {
+      const qty = i.qty || 0
+      const rev = qty * (i.unitPrice || 0)
+      let unit = i.unitCost, est = false
+      if (unit == null) {                       // sold before costs were saved → estimate
+        const p = prodById.get(i.productId)
+        const v = i.variantId ? varById.get(i.variantId) : null
+        unit = p ? pricesFor(p, v).buy : 0
+        est = true
+      }
+      const cost = qty * unit
+      revenue += rev; cogs += cost; if (est) estimated += 1
+      const label = i.variant ? `${i.productName} · ${i.variant}` : i.productName
+      const r = rows.get(label) || { label, units: 0, revenue: 0, cost: 0, est: false }
+      r.units += qty; r.revenue += rev; r.cost += cost; r.est = r.est || est
+      rows.set(label, r)
+    }))
+    const gross = revenue - cogs
+    return {
+      revenue, cogs, gross, estimated,
+      margin: revenue > 0 ? (gross / revenue) * 100 : 0,
+      rows: [...rows.values()]
+        .map(r => ({ ...r, profit: r.revenue - r.cost, margin: r.revenue > 0 ? ((r.revenue - r.cost) / r.revenue) * 100 : 0 }))
+        .sort((a, b) => b.profit - a.profit),
+    }
+  }, [filtSales, products, variants])
 
   // ── Chart series ───────────────────────────────────────────────────────────
   const { series, multiDay } = useMemo(() => {
@@ -379,6 +413,57 @@ export default function Reports({ sales, expenses, lending, borrowing, T, L, cur
           </ResponsiveContainer>
         )}
       </div>
+
+      {/* ════════════════════════════════════════════════════════════════════
+          PROFIT & MARGIN — real cost of goods, per product and per type
+          ════════════════════════════════════════════════════════════════ */}
+      {profit.rows.length > 0 && (
+        <div style={{ background: T.surface, border: `1px solid ${T.border}`, borderRadius: 12, padding: 20, marginBottom: 16 }}>
+          <SecTitle T={T}>💹 Profit &amp; Margin</SecTitle>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px,1fr))', gap: 10, marginBottom: 14 }}>
+            {[
+              { label: 'Sales value',   value: cur(profit.revenue), color: T.textPrimary,                hint: 'Items sold at their price' },
+              { label: 'Cost of goods', value: cur(profit.cogs),    color: AMB,                           hint: 'What they cost you' },
+              { label: 'Gross profit',  value: cur(profit.gross),   color: profit.gross >= 0 ? GRN : RED, hint: 'Sales value − cost' },
+              { label: 'Margin',        value: profit.margin.toFixed(1) + '%', color: profit.margin >= 0 ? BLU : RED, hint: 'Profit ÷ sales value' },
+            ].map((s, i) => (
+              <div key={i} style={{ background: T.bg, border: `1px solid ${T.border}`, borderRadius: 10, padding: '10px 12px' }}>
+                <div style={{ fontSize: 9, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: .5, marginBottom: 4 }}>{s.label}</div>
+                <div className="mono" style={{ fontSize: 16, fontWeight: 800, color: s.color }}>{s.value}</div>
+                <div style={{ fontSize: 9, color: T.textMuted, marginTop: 3 }}>{s.hint}</div>
+              </div>
+            ))}
+          </div>
+          {profit.estimated > 0 && (
+            <div style={{ fontSize: 11, color: AMB, background: AMB + '12', border: `1px solid ${AMB}33`, borderRadius: 8, padding: '8px 12px', marginBottom: 12, lineHeight: 1.5 }}>
+              ≈ {profit.estimated} sold item{profit.estimated !== 1 ? 's were' : ' was'} recorded before costs were saved, so today's buy price is used for {profit.estimated !== 1 ? 'them' : 'it'} (marked ≈).
+            </div>
+          )}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: T.surfaceHigh }}>
+                  {['Product / type', 'Units', 'Sales', 'Cost', 'Profit', 'Margin'].map((h, i) => (
+                    <th key={i} style={{ textAlign: i === 0 ? 'left' : 'right', padding: '9px 12px', fontSize: 10, color: T.textMuted, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, borderBottom: `2px solid ${T.border}`, whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {profit.rows.map(r => (
+                  <tr key={r.label} style={{ borderBottom: `1px solid ${T.border}22` }}>
+                    <td style={{ padding: '10px 12px', fontWeight: 600, color: T.textPrimary }}>{r.est ? '≈ ' : ''}{r.label}</td>
+                    <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: T.accent }}>{r.units}</td>
+                    <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', color: T.textSecondary }}>{cur(r.revenue)}</td>
+                    <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', color: T.textSecondary }}>{cur(r.cost)}</td>
+                    <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: r.profit >= 0 ? GRN : RED }}>{cur(r.profit)}</td>
+                    <td className="mono" style={{ padding: '10px 12px', textAlign: 'right', color: T.textMuted }}>{r.margin.toFixed(0)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════════
           SALES BY PRODUCT — units + revenue

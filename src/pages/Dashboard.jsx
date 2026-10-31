@@ -8,8 +8,9 @@ import { GRN, RED, AMB, BLU, PUR } from '../data/constants.js'
 import { todayStr, fmtD, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Stat, SecTitle, ChartTip } from '../components/UI.jsx'
 import { useMemo } from 'react'
+import { attentionList } from '../utils/stock.js'
 
-export default function Dashboard({ products, sales, expenses, lending, borrowing, T, L, cur }) {
+export default function Dashboard({ products, variants, sales, expenses, lending, borrowing, T, L, cur }) {
   const { td, todayRev, todayExp, profit, uncol, weekRev, monthRev, last7, recent,
           lowStock, outOfStock, pendingLend, pendingBorr } = useMemo(() => {
     const td       = todayStr()
@@ -40,8 +41,10 @@ export default function Dashboard({ products, sales, expenses, lending, borrowin
   }, [sales, expenses, products, lending, borrowing])
   const plend   = lending.filter(l => l.status === 'Pending').slice(0, 4)
   const pborr   = borrowing.filter(b => b.status === 'Pending').slice(0, 4)
-  const lowStk  = products.filter(p => p.stock <= 3 && p.stock > 0)
-  const outStk  = products.filter(p => p.stock === 0)
+  // Per-product / per-type reorder levels (a type is flagged on its own)
+  const alerts  = useMemo(() => attentionList(products, variants), [products, variants])
+  const lowStk  = alerts.filter(a => a.status === 'low')
+  const outStk  = alerts.filter(a => a.status === 'out')
 
   return (
     <div className="fade-in">
@@ -131,8 +134,8 @@ export default function Dashboard({ products, sales, expenses, lending, borrowin
         <div style={{ background: T.surface, border: `1px solid ${AMB}55`, borderRadius: 12, padding: 20 }}>
           <SecTitle T={T}>{L.stockAlerts}</SecTitle>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {outStk.map(p => <Badge key={p.id} color={RED}>🔴 {p.name}</Badge>)}
-            {lowStk.map(p => <Badge key={p.id} color={AMB}>🟡 {p.name} — {p.stock}</Badge>)}
+            {outStk.map(a => <Badge key={a.key} color={RED}>🔴 {a.name}</Badge>)}
+            {lowStk.map(a => <Badge key={a.key} color={AMB}>🟡 {a.name} — {a.stock}</Badge>)}
           </div>
         </div>
       )}

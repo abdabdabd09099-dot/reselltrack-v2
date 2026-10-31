@@ -29,6 +29,12 @@ const safeStr = (v, max=500) => {
   return String(v).trim().replace(/<[^>]*>/g,'').replace(/javascript:/gi,'').slice(0,max) || null
 }
 
+// ── Schema tolerance ──────────────────────────────────────────────────────────
+// New stock columns/tables only exist after supabase-stock-phase1.sql has been
+// run. These checks let the app keep working (without the new features) until then.
+const isMissingColumn = e => !!e && (e.code === '42703' || e.code === 'PGRST204' ||
+  /column .* does not exist|Could not find the '.*' column/i.test(e.message || ''))
+
 // ── Products ──────────────────────────────────────────────────────────────────
 export const apiProducts = {
   fetch: async () => {
@@ -41,13 +47,14 @@ export const apiProducts = {
       buyPrice:  safeNum(p.buy_price),
       sellPrice: safeNum(p.sell_price),
       stock:     safeNum(p.stock),
+      reorderLevel: p.reorder_level != null ? safeNum(p.reorder_level) : 3,
       createdAt: p.created_at,
     }))
   },
 
   create: async (p, userId) => {
     if (!userId) throw new Error('Not authenticated')
-    const { data, error } = await sb.from('products').insert({
+    const row = {
       user_id:     userId,
       sku:         safeStr(p.sku),
       name:        safeStr(p.name),
@@ -56,7 +63,13 @@ export const apiProducts = {
       buy_price:   safeNum(p.buyPrice),
       sell_price:  safeNum(p.sellPrice, 0.01),
       stock:       safeNum(p.stock),
-    }).select().single()
+    }
+    if (p.reorderLevel != null) row.reorder_level = safeNum(p.reorderLevel)
+    let { data, error } = await sb.from('products').insert(row).select().single()
+    if (error && isMissingColumn(error) && 'reorder_level' in row) {
+      delete row.reorder_level
+      ;({ data, error } = await sb.from('products').insert(row).select().single())
+    }
     throwIfError(error)
     return {
       id: data.id, sku: data.sku, name: data.name,
@@ -64,19 +77,39 @@ export const apiProducts = {
       buyPrice:  safeNum(data.buy_price),
       sellPrice: safeNum(data.sell_price),
       stock:     safeNum(data.stock),
+      reorderLevel: data.reorder_level != null ? safeNum(data.reorder_level) : 3,
       createdAt: data.created_at,
     }
   },
 
   update: async (id, p) => {
-    const { error } = await sb.from('products').update({
+    const row = {
       name:        safeStr(p.name),
       category:    safeStr(p.category),
       description: safeStr(p.description),
       buy_price:   safeNum(p.buyPrice),
       sell_price:  safeNum(p.sellPrice, 0.01),
-      stock:       safeNum(p.stock),
-    }).eq('id', id)
+    }
+    if (p.stock !== undefined)        row.stock = safeNum(p.stock)   // only when explicitly given
+    if (p.reorderLevel != null) row.reorder_level = safeNum(p.reorderLevel)
+    let { error } = await sb.from('products').update(row).eq('id', id)
+    if (error && isMissingColumn(error) && 'reorder_level' in row) {
+      delete row.reorder_level
+      ;({ error } = await sb.from('products').update(row).eq('id', id))
+    }
+    throwIfError(error)
+  },
+
+  // Stock-only writes — used by the stock engine so a stock change can never
+  // overwrite name / price edits made elsewhere.
+  setStock: async (id, stock) => {
+    const { error } = await sb.from('products').update({ stock: safeNum(stock) }).eq('id', id)
+    throwIfError(error)
+  },
+
+  // Buy-price-only write — used when a restock happens at a new price.
+  setBuyPrice: async (id, buyPrice) => {
+    const { error } = await sb.from('products').update({ buy_price: safeNum(buyPrice) }).eq('id', id)
     throwIfError(error)
   },
 
@@ -84,6 +117,33 @@ export const apiProducts = {
     const { error } = await sb.from('products').delete().eq('id', id)
     throwIfError(error)
   },
+}
+
+// ── Sale items insert (shared by create / edit / offline sync) ────────────────
+// Saves the type sold and the buy price at the time of sale. If the database
+// has not been upgraded yet, falls back to the original columns.
+export const insertSaleItems = async (saleId, items) => {
+  const full = (items || []).map(i => ({
+    sale_id:      saleId,
+    product_id:   i.productId   || null,
+    product_name: safeStr(i.productName),
+    qty:          safeNum(i.qty, 1),
+    unit_price:   safeNum(i.unitPrice),
+    variant:      i.variant || null,
+    variant_id:   i.variantId || null,
+    unit_cost:    i.unitCost != null ? safeNum(i.unitCost) : null,
+  }))
+  if (!full.length) return
+  let { error } = await sb.from('sale_items').insert(full)
+  if (error && isMissingColumn(error)) {
+    const legacy = full.map(({ variant_id, unit_cost, ...rest }) => rest)
+    ;({ error } = await sb.from('sale_items').insert(legacy))
+    if (error && isMissingColumn(error)) {
+      const bare = legacy.map(({ variant, ...rest }) => rest)
+      ;({ error } = await sb.from('sale_items').insert(bare))
+    }
+  }
+  throwIfError(error, 'sale_items')
 }
 
 // ── Sales ─────────────────────────────────────────────────────────────────────
@@ -112,6 +172,8 @@ export const apiSales = {
         qty:         safeNum(i.qty, 1),
         unitPrice:   safeNum(i.unit_price),
         variant:     i.variant || '',
+        variantId:   i.variant_id || null,
+        unitCost:    i.unit_cost != null ? safeNum(i.unit_cost) : null,
       })),
     }))
   },
@@ -141,16 +203,7 @@ export const apiSales = {
     }).select().single()
     throwIfError(sErr, 'sales')
 
-    const items = sale.items.map(i => ({
-      sale_id:      saleRow.id,
-      product_id:   i.productId   || null,
-      product_name: safeStr(i.productName),
-      qty:          safeNum(i.qty, 1),
-      unit_price:   safeNum(i.unitPrice),
-      variant:      i.variant || null,
-    }))
-    const { error: iErr } = await sb.from('sale_items').insert(items)
-    throwIfError(iErr, 'sale_items')
+    await insertSaleItems(saleRow.id, sale.items)
     return saleRow
   },
 
@@ -162,6 +215,112 @@ export const apiSales = {
       status: 'Paid', balance: 0, amount_paid: s.total_amount,
     }).eq('id', id)
     throwIfError(error)
+  },
+}
+
+// ── Stock: product types + movement log ───────────────────────────────────────
+const mapVariant = v => ({
+  id:           v.id,
+  productId:    v.product_id,
+  name:         v.name,
+  stock:        safeNum(v.stock),
+  buyPrice:     v.buy_price  != null ? safeNum(v.buy_price)  : null,
+  sellPrice:    v.sell_price != null ? safeNum(v.sell_price) : null,
+  reorderLevel: v.reorder_level != null ? safeNum(v.reorder_level) : 3,
+  createdAt:    v.created_at,
+})
+const mapMovement = m => ({
+  id:           m.id,
+  productId:    m.product_id,
+  variantId:    m.variant_id,
+  productName:  m.product_name,
+  variantName:  m.variant_name,
+  type:         m.movement_type,
+  qty:          Number(m.qty_change) || 0,
+  balanceAfter: m.balance_after != null ? Number(m.balance_after) : null,
+  unitCost:     m.unit_cost != null ? safeNum(m.unit_cost) : null,
+  reason:       m.reason,
+  refId:        m.ref_id,
+  createdAt:    m.created_at,
+})
+
+export const apiStock = {
+  // Never throws: { ready:false } means the database upgrade has not been run.
+  fetchAll: async () => {
+    try {
+      const [v, m] = await Promise.all([
+        sb.from('product_variants').select('*').order('created_at', { ascending: true }),
+        sb.from('stock_movements').select('*').order('created_at', { ascending: false }).limit(500),
+      ])
+      if (v.error) return { variants: [], movements: [], ready: false }
+      return {
+        variants:  (v.data || []).map(mapVariant),
+        movements: m.error ? [] : (m.data || []).map(mapMovement),
+        ready:     true,
+      }
+    } catch {
+      return { variants: [], movements: [], ready: false }
+    }
+  },
+
+  createVariant: async (v, userId) => {
+    if (!userId) throw new Error('Not authenticated')
+    const { data, error } = await sb.from('product_variants').insert({
+      user_id:       userId,
+      product_id:    v.productId,
+      name:          safeStr(v.name, 60),
+      stock:         safeNum(v.stock),
+      buy_price:     v.buyPrice  != null && v.buyPrice  !== '' ? safeNum(v.buyPrice)  : null,
+      sell_price:    v.sellPrice != null && v.sellPrice !== '' ? safeNum(v.sellPrice) : null,
+      reorder_level: v.reorderLevel != null && v.reorderLevel !== '' ? safeNum(v.reorderLevel) : 3,
+    }).select().single()
+    throwIfError(error, 'product_variants')
+    return mapVariant(data)
+  },
+
+  updateVariant: async (id, v) => {
+    const { error } = await sb.from('product_variants').update({
+      name:          safeStr(v.name, 60),
+      buy_price:     v.buyPrice  != null && v.buyPrice  !== '' ? safeNum(v.buyPrice)  : null,
+      sell_price:    v.sellPrice != null && v.sellPrice !== '' ? safeNum(v.sellPrice) : null,
+      reorder_level: v.reorderLevel != null && v.reorderLevel !== '' ? safeNum(v.reorderLevel) : 3,
+    }).eq('id', id)
+    throwIfError(error, 'product_variants')
+  },
+
+  setVariantStock: async (id, stock) => {
+    const { error } = await sb.from('product_variants').update({ stock: safeNum(stock) }).eq('id', id)
+    throwIfError(error, 'product_variants')
+  },
+
+  setVariantBuyPrice: async (id, buyPrice) => {
+    const { error } = await sb.from('product_variants').update({ buy_price: safeNum(buyPrice) }).eq('id', id)
+    throwIfError(error, 'product_variants')
+  },
+
+  deleteVariant: async (id) => {
+    const { error } = await sb.from('product_variants').delete().eq('id', id)
+    throwIfError(error, 'product_variants')
+  },
+
+  // Best-effort: a failed history write must never block a sale or restock.
+  logMovements: async (rows, userId) => {
+    if (!rows?.length || !userId) return false
+    const { error } = await sb.from('stock_movements').insert(rows.map(m => ({
+      user_id:       userId,
+      product_id:    m.productId || null,
+      variant_id:    m.variantId || null,
+      product_name:  safeStr(m.productName, 120),
+      variant_name:  safeStr(m.variantName, 60),
+      movement_type: m.type,
+      qty_change:    Math.trunc(Number(m.qty) || 0),
+      balance_after: m.balanceAfter != null ? Math.trunc(Number(m.balanceAfter)) : null,
+      unit_cost:     m.unitCost != null ? safeNum(m.unitCost) : null,
+      reason:        safeStr(m.reason, 200),
+      ref_id:        m.refId || null,
+      created_at:    m.createdAt || new Date().toISOString(),
+    })))
+    return !error
   },
 }
 

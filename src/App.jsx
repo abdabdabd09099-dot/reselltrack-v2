@@ -3,7 +3,8 @@
 // Flow: Landing → Demo (optional) → Auth → Full App
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react'
-import { sb, signOut, apiProducts, apiSales, apiExpenses, apiLending, apiBorrowing, runMigrations } from './utils/supabase.js'
+import { sb, signOut, apiProducts, apiSales, apiExpenses, apiLending, apiBorrowing, apiStock, runMigrations } from './utils/supabase.js'
+import SyncBadge from './components/SyncBadge.jsx'
 import { CURRENCIES, THEMES, LANGS, DEFAULT_SETTINGS } from './data/constants.js'
 import { loadSettings, saveSettings } from './utils/helpers.js'
 import { buildCss } from './utils/buildCss.js'
@@ -63,6 +64,10 @@ export default function App() {
   const [expenses,  setExpenses]  = useState([])
   const [lending,   setLending]   = useState([])
   const [borrowing, setBorrowing] = useState([])
+  // Stock management: product types + movement history
+  const [variants,   setVariants]   = useState([])
+  const [movements,  setMovements]  = useState([])
+  const [stockReady, setStockReady] = useState(true)   // false until supabase-stock-phase1.sql is run
 
   // ── Demo data ──────────────────────────────────────────────────────────────
   const {
@@ -94,18 +99,21 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, [])
 
+  // ── Load everything from the database (one place, used 3 ways) ─────────────
+  const loadAll = () => Promise.all([
+    apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(),
+    apiLending.fetch(), apiBorrowing.fetch(), apiStock.fetchAll(),
+  ]).then(([p, s, e, l, b, st]) => {
+    setProducts(p); setSales(s); setExpenses(e); setLending(l); setBorrowing(b)
+    setVariants(st.variants); setMovements(st.movements); setStockReady(st.ready)
+  })
+
   // ── Load data + run migrations (real users only) ───────────────────────────
   useEffect(() => {
     if (!user || isDemo) return
     setLoading(true); setNetError(false)
     runMigrations().catch(() => {}) // silently apply DB migrations
-    Promise.all([
-      apiProducts.fetch(), apiSales.fetch(), apiExpenses.fetch(),
-      apiLending.fetch(), apiBorrowing.fetch(),
-    ])
-      .then(([p, s, e, l, b]) => {
-        setProducts(p); setSales(s); setExpenses(e); setLending(l); setBorrowing(b)
-      })
+    loadAll()
       .catch(() => setNetError(true))
       .finally(() => setLoading(false))
   }, [user, isDemo])
@@ -155,14 +163,15 @@ export default function App() {
   const shared = { T, L, cur }
 
   // ── Handlers ───────────────────────────────────────────────────────────────
-  const enterDemo = () => { setIsDemo(true); setView('app') }
-  const goSignUp  = () => { setIsDemo(false); setView('auth') }
+  const enterDemo = () => { setVariants([]); setMovements([]); setIsDemo(true); setView('app') }
+  const goSignUp  = () => { setVariants([]); setMovements([]); setIsDemo(false); setView('auth') }
   const goSignIn  = () => setView('auth')
 
   const handleSignOut = () => {
     signOut()
     setUser(null)
     setProducts([]); setSales([]); setExpenses([]); setLending([]); setBorrowing([])
+    setVariants([]); setMovements([])
     setView('landing')
   }
 
@@ -192,9 +201,7 @@ export default function App() {
         onRetry={() => {
           setNetError(false)
           setLoading(true)
-          Promise.all([apiProducts.fetch(),apiSales.fetch(),apiExpenses.fetch(),apiLending.fetch(),apiBorrowing.fetch()])
-            .then(([p,s,e,l,b])=>{setProducts(p);setSales(s);setExpenses(e);setLending(l);setBorrowing(b)})
-            .catch(()=>setNetError(true)).finally(()=>setLoading(false))
+          loadAll().catch(() => setNetError(true)).finally(() => setLoading(false))
         }}
       />
     )
@@ -304,12 +311,12 @@ export default function App() {
             )}
 
             {/* ── Page routing ── */}
-            {page === 'dashboard' && <Dashboard products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
-            {page === 'products'  && <Products  products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
-            {page === 'sales'     && <Sales     products={P} setProducts={setP} sales={S} setSales={setS} lending={LD} setLending={setLD} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
-            {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} products={P} setProducts={setP} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
+            {page === 'dashboard' && <Dashboard products={P} variants={variants} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'products'  && <Products  products={P} setProducts={setP} variants={variants} setVariants={setVariants} movements={movements} setMovements={setMovements} stockReady={isDemo ? true : stockReady} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
+            {page === 'sales'     && <Sales     products={P} setProducts={setP} variants={variants} setVariants={setVariants} movements={movements} setMovements={setMovements} stockReady={isDemo ? true : stockReady} sales={S} setSales={setS} lending={LD} setLending={setLD} userId={userId} isDemo={isDemo} demoApi={demoApi} onDemoLimit={() => setDemoLimitHit(true)} {...shared} />}
+            {page === 'expenses'  && <Expenses  expenses={E} setExpenses={setE} products={P} setProducts={setP} variants={variants} setVariants={setVariants} movements={movements} setMovements={setMovements} stockReady={isDemo ? true : stockReady} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
             {page === 'lend'      && <LendBorrow lending={LD} setLending={setLD} borrowing={B} setBorrowing={setB} userId={userId} isDemo={isDemo} demoApi={demoApi} {...shared} />}
-            {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
+            {page === 'reports'   && <Reports   sales={S} expenses={E} lending={LD} borrowing={B} products={P} variants={variants} {...shared} />}
             {page === 'calculator' && <PriceCalculator T={T} cur={cur} products={P} />}
             {page === 'settings'  && <Settings  settings={settings} setSettings={setSettings} user={user} onSignOut={handleSignOut} products={P} sales={S} expenses={E} lending={LD} borrowing={B} {...shared} />}
           </div>
@@ -327,6 +334,7 @@ export default function App() {
 
         <InstallPrompt T={T} />
         <ToastProvider T={T} />
+        {!isDemo && user && <SyncBadge userId={userId} T={T} onSynced={() => { loadAll().catch(() => {}) }} />}
       </div>
     </>
   )

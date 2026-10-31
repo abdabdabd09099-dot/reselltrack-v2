@@ -4,11 +4,11 @@
 // When online:  auto-syncs pending records to Supabase
 // Shows sync badge when pending records exist.
 // ─────────────────────────────────────────────────────────────────────────────
-import { sb } from './supabase.js'
+import { sb, apiSales } from './supabase.js'
 
 const DB_NAME    = 'reselltrack_offline'
-const DB_VERSION = 1
-const STORES     = ['sales', 'products', 'expenses', 'lending', 'borrowing']
+const DB_VERSION = 2   // v2 adds the 'stock' store (queued stock changes)
+const STORES     = ['sales', 'products', 'expenses', 'lending', 'borrowing', 'stock']
 
 // ── Open IndexedDB ────────────────────────────────────────────────────────────
 let _db = null
@@ -109,30 +109,52 @@ export const syncToSupabase = async (userId, callbacks = {}) => {
   for (const record of pendingSales) {
     try {
       const { local_id, sync_status, created_offline_at, items = [], ...sale } = record
-      const { data: saleRow, error: sErr } = await sb.from('sales').insert({
-        user_id:        userId,
-        customer_name:  sale.customerName,
-        contact:        sale.contact || null,
-        sale_date:      sale.date,
-        total_amount:   sale.totalAmount,
-        amount_paid:    sale.amountPaid,
-        balance:        sale.balance,
-        payment_method: sale.paymentMethod,
-        status:         sale.status,
-        notes:          sale.notes || null,
-      }).select().single()
-      if (sErr) throw sErr
-      if (items.length) {
-        await sb.from('sale_items').insert(
-          items.map(i => ({
-            sale_id: saleRow.id, product_id: i.productId || null,
-            product_name: i.productName, qty: i.qty, unit_price: i.unitPrice,
-          }))
-        )
-      }
+      // Same code path as an online sale: keeps split payments, type and cost
+      const saleRow = await apiSales.create({ ...sale, items }, userId)
       await markSynced('sales', local_id)
       synced++
       callbacks.onProgress?.('sale', saleRow.id)
+    } catch { failed++ }
+  }
+
+  // ── Sync stock changes (made while offline) ─────────────────────────────────
+  // Applied as +/- amounts on top of whatever the database holds now.
+  const pendingStock = await getPending('stock')
+  for (const record of pendingStock) {
+    try {
+      const { local_id, productId, variantId, delta = 0, type, reason, unitCost, productName, variantName } = record
+      let balance
+      if (variantId) {
+        const { data: v, error: vErr } = await sb.from('product_variants').select('stock').eq('id', variantId).single()
+        if (vErr) throw vErr
+        balance = Math.max(0, (v.stock || 0) + delta)
+        const { error: uErr } = await sb.from('product_variants').update({ stock: balance }).eq('id', variantId)
+        if (uErr) throw uErr
+        // A product with types always holds the total of its types
+        const { data: all, error: aErr } = await sb.from('product_variants').select('stock').eq('product_id', productId)
+        if (aErr) throw aErr
+        const sum = (all || []).reduce((a, x) => a + (x.stock || 0), 0)
+        const { error: pErr } = await sb.from('products').update({ stock: sum }).eq('id', productId)
+        if (pErr) throw pErr
+      } else {
+        const { data: p, error: pErr } = await sb.from('products').select('stock').eq('id', productId).single()
+        if (pErr) throw pErr
+        balance = Math.max(0, (p.stock || 0) + delta)
+        const { error: uErr } = await sb.from('products').update({ stock: balance }).eq('id', productId)
+        if (uErr) throw uErr
+      }
+      // History is best-effort — never fail the sync because of it
+      try {
+        await sb.from('stock_movements').insert({
+          user_id: userId, product_id: productId, variant_id: variantId || null,
+          product_name: productName || null, variant_name: variantName || null,
+          movement_type: type, qty_change: delta, balance_after: balance,
+          unit_cost: unitCost ?? null, reason: reason || null,
+          created_at: record.createdAt || new Date().toISOString(),
+        })
+      } catch { /* history table not created yet */ }
+      await markSynced('stock', local_id)
+      synced++
     } catch { failed++ }
   }
 

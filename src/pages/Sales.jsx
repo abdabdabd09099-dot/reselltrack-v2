@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
-import { apiSales, apiProducts, apiLending, sb } from '../utils/supabase.js'
+import { apiSales, apiLending, sb, insertSaleItems } from '../utils/supabase.js'
 import { saveOffline } from '../utils/offlineQueue.js'
 import { GRN, RED, AMB, BLU } from '../data/constants.js'
 import { todayStr, fmtDT, thisWeekRange, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 import { toast } from '../utils/toast.jsx'
 import { dailyCash } from '../utils/dailyCash.js'
+import {
+  applyStockChanges, netSaleChanges, hasTypes, variantsOf, stockOf, pricesFor,
+} from '../utils/stock.js'
 
 const Lbl = Field
+const isOnline = () => typeof navigator === 'undefined' || navigator.onLine
 const EDIT_WINDOW_MS = 2 * 60 * 60 * 1000
 const PERIODS = [
   { id:'all', label:'All Time' }, { id:'today', label:'Today' },
@@ -28,7 +32,7 @@ function EditTimer({ saleDate }) {
   return <span style={{ fontSize:10, background:AMB+'22', color:AMB, border:`1px solid ${AMB}44`, borderRadius:4, padding:'2px 6px', fontWeight:600, whiteSpace:'nowrap' }}>✏️ {remaining}</span>
 }
 
-export default function Sales({ products, setProducts, sales, setSales, lending, setLending, userId, T, L, cur, isDemo, demoApi, onDemoLimit }) {
+export default function Sales({ products, setProducts, variants, setVariants, setMovements, stockReady, sales, setSales, lending, setLending, userId, T, L, cur, isDemo, demoApi, onDemoLimit }) {
   const [show,      setShow]      = useState(false)
   const [editSale,  setEditSale]  = useState(null)
   const [saving,    setSaving]    = useState(false)
@@ -83,7 +87,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const mkBlank = () => ({
     customerName:'', contact:'',
     date: todayStr(), time: new Date().toTimeString().slice(0,5),
-    items: [{ productId:'', productName:'', qty:1, unitPrice:0, variant:'' }],
+    items: [{ productId:'', productName:'', qty:1, unitPrice:0, variant:'', variantId:'' }],
     paymentMethod:'cash', amountPaid:'', splitMethod:'transfer', splitAmount:'', dueDate:'', notes:'', sendToLend:true,
   })
   const [form, setForm] = useState(mkBlank())
@@ -95,36 +99,85 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
   const rowTotalPaid = rowPaid1 + rowPaid2
   const rowBal       = Math.max(0, rowTotal - rowTotalPaid)
 
-  // ── Update item (stock + duplicate checks) ─────────────────────────────────
+  // ── Stock helpers for this form ────────────────────────────────────────────
+  const stockCtx = () => ({
+    products, variants, userId, isDemo, stockReady,
+    offline: !isDemo && !isOnline(),
+    setProducts, setVariants, setMovements,
+  })
+  // Units of a product/type held by the sale being edited (they return to stock first)
+  const heldBy = (productId, variantId) => editSale
+    ? (editSale.items || [])
+        .filter(oi => oi.productId === productId && (oi.variantId || null) === (variantId || null))
+        .reduce((a, oi) => a + oi.qty, 0)
+    : 0
+  const availableFor = (productId, variantId) => {
+    const p = products.find(x => x.id === productId)
+    if (!p) return 0
+    const v = variantId ? variants.find(x => x.id === variantId) : null
+    const base = v ? v.stock : (hasTypes(variants, productId) ? 0 : p.stock)
+    return base + heldBy(productId, variantId)
+  }
+
+  // ── Update item (stock + type + duplicate checks) ──────────────────────────
   const updItem = (idx, key, val) => {
     setItemWarn('')
     setForm(f => {
       const items = [...f.items]
       items[idx] = { ...items[idx], [key]: val }
+      const it = items[idx]
+
       if (key === 'productId') {
-        const p = products.find(p => p.id === val)
-        if (p) {
-          if (p.stock <= 0) {
-            setItemWarn(`⛔ "${p.name}" is out of stock.`)
-            items[idx].productId = ''
-            return { ...f, items }
-          }
-          const alreadyUsed = f.items.some((it, i) => i !== idx && it.productId === val && it.variant === items[idx].variant)
-          if (alreadyUsed) {
-            setItemWarn(`⚠️ "${p.name}" already in list. Add a variant to use it again.`)
-            items[idx].productId = ''
-            return { ...f, items }
-          }
-          items[idx].productName = p.name
-          items[idx].unitPrice   = p.sellPrice
-          if (items[idx].qty > p.stock) items[idx].qty = p.stock
+        const p = products.find(x => x.id === val)
+        items[idx] = { ...it, variantId: '', variant: '', productName: p ? p.name : '', unitPrice: p ? p.sellPrice : 0 }
+        if (!p) return { ...f, items }
+        const typed = hasTypes(variants, p.id)
+        const heldAny = editSale ? (editSale.items || []).filter(oi => oi.productId === p.id).reduce((a, oi) => a + oi.qty, 0) : 0
+        if (stockOf(p, variants) + heldAny <= 0) {
+          setItemWarn(`⛔ "${p.name}" is out of stock.`)
+          items[idx] = { ...items[idx], productId: '', productName: '' }
+          return { ...f, items }
         }
+        if (!typed) {
+          const dup = f.items.some((x, i) => i !== idx && x.productId === val && !x.variantId && !(x.variant || ''))
+          if (dup) {
+            setItemWarn(`⚠️ "${p.name}" already in list. Add a variant to use it again.`)
+            items[idx] = { ...items[idx], productId: '', productName: '' }
+            return { ...f, items }
+          }
+          const cap = availableFor(p.id, null)
+          if (items[idx].qty > cap) items[idx].qty = cap
+        }
+        return { ...f, items }          // typed products wait for a type to be chosen
       }
+
+      if (key === 'variantId') {
+        const p = products.find(x => x.id === it.productId)
+        const v = variants.find(x => x.id === val)
+        if (!p || !v) { items[idx] = { ...it, variantId: '', variant: '' }; return { ...f, items } }
+        if (availableFor(p.id, v.id) <= 0) {
+          setItemWarn(`⛔ "${p.name} · ${v.name}" is out of stock.`)
+          items[idx] = { ...it, variantId: '', variant: '' }
+          return { ...f, items }
+        }
+        if (f.items.some((x, i) => i !== idx && x.productId === p.id && x.variantId === v.id)) {
+          setItemWarn(`⚠️ "${p.name} · ${v.name}" is already in the list.`)
+          items[idx] = { ...it, variantId: '', variant: '' }
+          return { ...f, items }
+        }
+        items[idx] = {
+          ...it, variantId: v.id, variant: v.name,
+          unitPrice: pricesFor(p, v).sell,
+          qty: Math.min(it.qty || 1, availableFor(p.id, v.id)),
+        }
+        return { ...f, items }
+      }
+
       if (key === 'qty') {
-        const p = products.find(p => p.id === items[idx].productId)
-        if (p && val > p.stock) {
-          setItemWarn(`⚠️ Only ${p.stock} units of "${p.name}" available.`)
-          items[idx].qty = p.stock
+        const needsType = it.productId && hasTypes(variants, it.productId) && !it.variantId
+        if (it.productId && !needsType) {
+          const cap = availableFor(it.productId, it.variantId || null)
+          if (val > cap) { setItemWarn(`⚠️ Only ${cap} available.`); items[idx] = { ...it, qty: cap } }
         }
       }
       return { ...f, items }
@@ -138,7 +191,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     setForm({
       customerName: s.customerName, contact: s.contact || '',
       date: d.toISOString().slice(0,10), time: d.toTimeString().slice(0,5),
-      items: s.items.map(i => ({ ...i, variant: i.variant || '' })),
+      items: (s.items || []).map(i => ({ ...i, variant: i.variant || '', variantId: i.variantId || '' })),
       paymentMethod: s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'cash' : 'transfer') : s.paymentMethod,
       amountPaid:    s.paymentMethod === 'split' ? String(s.cashPaid || s.amountPaid) : String(s.amountPaid),
       splitMethod:   s.paymentMethod === 'split' ? (s.cashPaid > 0 ? 'transfer' : 'cash') : 'transfer',
@@ -153,22 +206,22 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     const ok = await toast.confirm(`Delete sale to ${s.customerName}?\nStock will be restored. This cannot be undone.`)
     if (!ok) return
     try {
-      if (isDemo) {
-        setSales(ss => ss.filter(x => x.id !== s.id))
-      } else {
+      if (!isDemo) {
         await sb.from('sale_items').delete().eq('sale_id', s.id)
         await sb.from('sales').delete().eq('id', s.id)
-        for (const item of s.items) {
-          const prod = products.find(p => p.id === item.productId)
-          if (prod) await apiProducts.update(item.productId, { ...prod, stock: prod.stock + item.qty })
-        }
-        setProducts(ps => ps.map(p => {
-          const it = s.items.find(i => i.productId === p.id)
-          return it ? { ...p, stock: p.stock + it.qty } : p
-        }))
-        setSales(ss => ss.filter(x => x.id !== s.id))
-        setLending(ls => ls.filter(l => l.saleId !== s.id))
       }
+      // Every item goes back to the exact product / type it came from
+      const res = await applyStockChanges(
+        (s.items || []).filter(i => i.productId).map(i => ({
+          productId: i.productId, variantId: i.variantId || null, delta: i.qty,
+          type: 'sale_delete', reason: `Sale to ${s.customerName} deleted`,
+          refId: isDemo ? null : s.id, unitCost: i.unitCost ?? null,
+        })),
+        stockCtx()
+      )
+      if (res.skipped.length) toast.warn('Some units could not be returned to a type. Use Stock → Adjust on the product.')
+      setSales(ss => ss.filter(x => x.id !== s.id))
+      setLending(ls => ls.filter(l => l.saleId !== s.id))
     } catch(e) { toast.error('Delete failed: ' + e.message) }
   }
 
@@ -178,11 +231,16 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
     const validItems = form.items.filter(i => i.productId)
     if (!validItems.length) return toast.error('Add at least one product.')
     for (const item of validItems) {
-      const p = products.find(p => p.id === item.productId)
+      const p = products.find(x => x.id === item.productId)
       if (!p) continue
-      const alreadyHeld = editSale ? (editSale.items.find(oi => oi.productId === item.productId)?.qty || 0) : 0
-      if (item.qty > p.stock + alreadyHeld) return toast.error(`⛔ Not enough stock for "${p.name}". Available: ${p.stock + alreadyHeld}`)
+      if (hasTypes(variants, p.id) && !item.variantId) return toast.error(`Choose a type for "${p.name}".`)
+      if (!(item.qty > 0)) return toast.error('Quantity must be at least 1.')
+      const avail = availableFor(item.productId, item.variantId || null)
+      if (item.qty > avail) {
+        return toast.error(`⛔ Not enough stock for "${p.name}${item.variant ? ' · ' + item.variant : ''}". Available: ${avail}`)
+      }
     }
+    if (editSale && !isDemo && !isOnline()) return toast.error('Go online to edit a sale.')
     setSaving(true)
     try {
       const dt     = form.date + 'T' + form.time + ':00'
@@ -204,50 +262,70 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
       const payMethod   = hasSplit && !sameMethods ? 'split' : form.paymentMethod
       const status      = bal === 0 ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid'
 
+      // Buy price AT THE MOMENT OF SALE — this is what makes profit reports accurate.
+      // An edited sale keeps the cost it was first sold with.
+      const costOf = item => {
+        const kept = editSale && (editSale.items || []).find(oi =>
+          oi.productId === item.productId && (oi.variantId || null) === (item.variantId || null) && oi.unitCost != null)
+        if (kept) return kept.unitCost
+        const p = products.find(x => x.id === item.productId)
+        const v = item.variantId ? variants.find(x => x.id === item.variantId) : null
+        return pricesFor(p, v).buy
+      }
+      const saleItems = validItems.map(i => ({ ...i, unitCost: costOf(i) }))
+
+      // A failed stock write must never undo a saved sale — warn and let the user adjust
+      const applyStock = async changes => {
+        try {
+          const res = await applyStockChanges(changes, stockCtx())
+          if (res.skipped.length) toast.warn('Some units could not be matched to a type. Use Stock → Adjust to correct them.')
+        } catch (e) {
+          toast.warn('Sale saved, but stock was not updated (' + e.message + '). Use Stock → Adjust.')
+        }
+      }
+
       if (editSale) {
-        for (const oi of editSale.items) {
-          const p = products.find(p => p.id === oi.productId)
-          if (p) await apiProducts.update(oi.productId, { ...p, stock: p.stock + oi.qty })
+        if (!isDemo) {
+          const { error: uErr } = await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: totalPaid, cash_paid: cashPaid||null, transfer_paid: xferPaid||null, balance: bal, payment_method: payMethod, status, notes: form.notes||null }).eq('id', editSale.id)
+          if (uErr) throw uErr
+          await sb.from('sale_items').delete().eq('sale_id', editSale.id)
+          await insertSaleItems(editSale.id, saleItems)
         }
-        for (const ni of validItems) {
-          const p = products.find(p => p.id === ni.productId)
-          if (p) await apiProducts.update(ni.productId, { ...p, stock: Math.max(0, p.stock - ni.qty) })
-        }
-        setProducts(ps => ps.map(p => {
-          let stock = p.stock
-          const old = editSale.items.find(i => i.productId === p.id)
-          const nw  = validItems.find(i => i.productId === p.id)
-          if (old) stock += old.qty
-          if (nw)  stock  = Math.max(0, stock - nw.qty)
-          return { ...p, stock }
-        }))
-        await sb.from('sales').update({ customer_name: form.customerName, contact: form.contact||null, sale_date: dt, total_amount: total, amount_paid: totalPaid, cash_paid: cashPaid||null, transfer_paid: xferPaid||null, balance: bal, payment_method: payMethod, status, notes: form.notes||null }).eq('id', editSale.id)
-        await sb.from('sale_items').delete().eq('sale_id', editSale.id)
-        await sb.from('sale_items').insert(validItems.map(i => ({ sale_id: editSale.id, product_id: i.productId, product_name: i.productName, qty: i.qty, unit_price: i.unitPrice })))
-        setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, status, notes: form.notes } : s))
+        await applyStock(netSaleChanges(editSale.items, saleItems).map(c => ({
+          ...c, type: 'sale_edit', reason: `Sale to ${form.customerName} edited`,
+          refId: isDemo ? null : editSale.id,
+        })))
+        setSales(ss => ss.map(s => s.id === editSale.id ? { ...s, customerName: form.customerName, contact: form.contact, date: dt, items: saleItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, status, notes: form.notes } : s))
         setEditSale(null)
       } else {
-        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: validItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, notes: form.notes, status }
+        const sale = { customerName: form.customerName, contact: form.contact, date: dt, items: saleItems, totalAmount: total, amountPaid: totalPaid, cashPaid, transferPaid: xferPaid, balance: bal, paymentMethod: payMethod, notes: form.notes, status }
+        const offline = !isDemo && !isOnline()
         let created
         if (isDemo) {
           created = demoApi.sales.create(sale)
           if (!created) { onDemoLimit?.(); setSaving(false); return }
-        } else if (!navigator.onLine) {
+        } else if (offline) {
           created = await saveOffline('sales', { ...sale, userId })
-          toast.info('📡 Offline — sale saved locally and will sync when reconnected.')
+          toast.info('📡 Offline — sale saved on this phone and will sync when reconnected.')
         } else {
           created = await apiSales.create(sale, userId)
         }
-        for (const item of validItems) {
-          const prod = products.find(p => p.id === item.productId)
-          if (prod) await apiProducts.update(item.productId, { ...prod, stock: Math.max(0, prod.stock - item.qty) })
-        }
-        setProducts(ps => ps.map(p => { const it = validItems.find(i => i.productId === p.id); return it ? { ...p, stock: Math.max(0, p.stock - it.qty) } : p }))
-        setSales(ss => [{ ...sale, id: created.id }, ...ss])
+        // Stock leaves the exact product / type that was sold (queued if offline)
+        await applyStock(saleItems.filter(i => i.productId).map(i => ({
+          productId: i.productId, variantId: i.variantId || null, delta: -i.qty,
+          type: 'sale', reason: `Sale to ${form.customerName}`,
+          refId: created?.id || null, unitCost: i.unitCost,
+        })))
+        setSales(ss => [{ ...sale, id: created?.id }, ...ss])
         if (bal > 0 && form.sendToLend && !isDemo) {
-          const lEntry = { personName: form.customerName, contact: form.contact, amount: bal, date: dt, dueDate: form.dueDate||'', notes: form.notes, status:'Pending', source:'sale', saleId: created.id }
-          const cl = await apiLending.create(lEntry, userId)
-          setLending(ls => [{ ...lEntry, id: cl.id }, ...ls])
+          const lEntry = { personName: form.customerName, contact: form.contact, amount: bal, date: dt, dueDate: form.dueDate||'', notes: form.notes, status:'Pending', source:'sale', saleId: created?.id }
+          if (offline) {
+            await saveOffline('lending', { ...lEntry, saleId: null, userId })
+            setLending(ls => [{ ...lEntry, id: 'offline-' + Date.now() }, ...ls])
+          } else {
+            const cl = await apiLending.create(lEntry, userId)
+            setLending(ls => [{ ...lEntry, id: cl.id }, ...ls])
+          }
         }
       }
       setShow(false); setForm(mkBlank()); setItemWarn('')
@@ -435,13 +513,27 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
                 <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>{L.product} *</label>
                 <select value={item.productId} onChange={e => updItem(idx,'productId',e.target.value)} style={{ fontSize:13, padding:'7px 9px' }}>
                   <option value="">{L.selectProduct}</option>
-                  {products.map(p => <option key={p.id} value={p.id} disabled={p.stock<=0}>{p.name} — Stock: {p.stock}{p.stock<=0?' (OUT)':''}</option>)}
+                  {products.map(p => {
+                    const st = stockOf(p, variants)
+                    const n  = variantsOf(variants, p.id).length
+                    return <option key={p.id} value={p.id} disabled={st<=0 && p.id !== item.productId}>{p.name} — Stock: {st}{n ? ` (${n} types)` : ''}{st<=0?' (OUT)':''}</option>
+                  })}
                 </select>
               </div>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 80px 80px 32px', gap:6, alignItems:'flex-end' }}>
                 <div>
-                  <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>Variant</label>
-                  <input value={item.variant||''} onChange={e => updItem(idx,'variant',e.target.value)} placeholder="Size, colour..." style={{ fontSize:12, padding:'6px 8px' }} />
+                  <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>{hasTypes(variants, item.productId) ? 'Type *' : 'Variant'}</label>
+                  {hasTypes(variants, item.productId) ? (
+                    <select value={item.variantId||''} onChange={e => updItem(idx,'variantId',e.target.value)} style={{ fontSize:12, padding:'6px 8px' }}>
+                      <option value="">Choose type…</option>
+                      {variantsOf(variants, item.productId).map(v => {
+                        const left = availableFor(item.productId, v.id)
+                        return <option key={v.id} value={v.id} disabled={left<=0 && v.id !== item.variantId}>{v.name} — {left} left</option>
+                      })}
+                    </select>
+                  ) : (
+                    <input value={item.variant||''} onChange={e => updItem(idx,'variant',e.target.value)} placeholder="Size, colour..." style={{ fontSize:12, padding:'6px 8px' }} />
+                  )}
                 </div>
                 <div>
                   <label style={{ fontSize:10, color:T.textMuted, display:'block', marginBottom:2, fontWeight:600, textTransform:'uppercase' }}>Price</label>
@@ -457,7 +549,7 @@ export default function Sales({ products, setProducts, sales, setSales, lending,
               {item.productId && <div style={{ marginTop:4, fontSize:11, color:T.textMuted, textAlign:'right' }}>Subtotal: <span className="mono" style={{ color:T.accent, fontWeight:700 }}>{cur(item.qty*item.unitPrice)}</span></div>}
             </div>
           ))}
-          <button onClick={() => setForm(f => ({ ...f, items:[...f.items,{productId:'',productName:'',qty:1,unitPrice:0,variant:''}] }))}
+          <button onClick={() => setForm(f => ({ ...f, items:[...f.items,{productId:'',productName:'',qty:1,unitPrice:0,variant:'',variantId:''}] }))}
             style={{ width:'100%', padding:'7px', borderRadius:8, border:`1.5px dashed ${T.accent}66`, background:T.accent+'0a', color:T.accent, fontWeight:600, fontSize:12, cursor:'pointer', marginBottom:10 }}>
             + {L.addItem||'Add Another Item'}
           </button>

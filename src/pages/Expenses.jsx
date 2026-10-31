@@ -3,12 +3,13 @@
 //   In Stock · Single Price · Total Expenses inputs + auto-calc total
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState } from 'react'
-import { apiExpenses, apiProducts } from '../utils/supabase.js'
+import { apiExpenses, apiProducts, apiStock } from '../utils/supabase.js'
 import { saveOffline } from '../utils/offlineQueue.js'
 import { RED, AMB, BLU, PUR, GRN, EXP_CATS } from '../data/constants.js'
 import { todayStr, fmtD, thisMonthRange, inRange } from '../utils/helpers.js'
 import { Badge, Btn, Modal, Field, Stat, Tbl, Icon } from '../components/UI.jsx'
 import { toast } from '../utils/toast.jsx'
+import { applyStockChanges, hasTypes, variantsOf, stockOf, pricesFor } from '../utils/stock.js'
 
 const Lbl = Field
 
@@ -29,18 +30,23 @@ const InfoTile = ({ label, value, color, T }) => (
   </div>
 )
 
-export default function Expenses({ expenses, setExpenses, products, setProducts, userId, T, L, cur, isDemo, demoApi }) {
+export default function Expenses({ expenses, setExpenses, products, setProducts, variants, setVariants, setMovements, stockReady, userId, T, L, cur, isDemo, demoApi }) {
   const [show,   setShow]   = useState(false)
   const [saving, setSaving] = useState(false)
 
-  const blank = { desc:'', category:'', amount:'', date:todayStr(), notes:'', restockProductId:'', restockQty:1, restockUnitPrice:0 }
+  const blank = { desc:'', category:'', amount:'', date:todayStr(), notes:'', restockProductId:'', restockVariantId:'', restockQty:1, restockUnitPrice:0 }
   const [form, setForm] = useState(blank)
   const sf = (k,v) => setForm(f => ({ ...f, [k]:v }))
 
   const isRestocking        = form.category === 'Restocking'
   const selectedProduct     = products.find(p => p.id === form.restockProductId)
+  const typed               = selectedProduct ? hasTypes(variants, selectedProduct.id) : false
+  const selectedVariant     = form.restockVariantId ? variants.find(v => v.id === form.restockVariantId) : null
+  const ready               = !!selectedProduct && (!typed || !!selectedVariant)   // typed products need a type first
+  const prices              = selectedProduct ? pricesFor(selectedProduct, selectedVariant) : { buy: 0, sell: 0 }
+  const currentStock        = selectedProduct ? (selectedVariant ? selectedVariant.stock : stockOf(selectedProduct, variants)) : 0
   const restockTotal        = +form.restockQty * +form.restockUnitPrice
-  const newStockAfterRestock = selectedProduct ? selectedProduct.stock + +form.restockQty : 0
+  const newStockAfterRestock = selectedProduct ? currentStock + (+form.restockQty || 0) : 0
 
   // ── Select restocking product — auto-fill fields ──────────────────────────
   const selectRestockProduct = productId => {
@@ -48,10 +54,27 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
     setForm(f => ({
       ...f,
       restockProductId: productId,
+      restockVariantId: '',
       desc:             p ? `Restocking: ${p.name}` : f.desc,
-      restockUnitPrice: p ? (p.buyPrice || 0) : 0,
-      amount:           p ? String(f.restockQty * (p.buyPrice || 0)) : f.amount,
+      // Products with types wait for a type; their price is filled in once chosen
+      restockUnitPrice: p && !hasTypes(variants, p.id) ? (p.buyPrice || 0) : 0,
+      amount:           p && !hasTypes(variants, p.id) ? String(f.restockQty * (p.buyPrice || 0)) : f.amount,
     }))
+  }
+
+  const selectRestockVariant = variantId => {
+    const p = products.find(x => x.id === form.restockProductId)
+    const v = variants.find(x => x.id === variantId)
+    setForm(f => {
+      const price = p ? pricesFor(p, v).buy : 0
+      return {
+        ...f,
+        restockVariantId: variantId,
+        desc:             p && v ? `Restocking: ${p.name} · ${v.name}` : f.desc,
+        restockUnitPrice: price,
+        amount:           String((+f.restockQty || 0) * price),
+      }
+    })
   }
 
   // ── Restock qty/price change → recalc total ───────────────────────────────
@@ -73,25 +96,44 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
     if (!form.desc)   return toast.error('Description is required.')
     if (!form.amount) return toast.error('Amount is required.')
     if (isRestocking && !form.restockProductId) return toast.error('Select a product to restock.')
+    if (isRestocking && typed && !form.restockVariantId) return toast.error('Choose which type you are restocking.')
     setSaving(true)
     try {
       const payload = { description: form.desc, category: form.category, amount: +form.amount, date: form.date, notes: form.notes }
       let created
       if (isDemo) {
         created = demoApi.expenses.create(payload)
-      } else if (!navigator.onLine) {
+      } else if (typeof navigator !== 'undefined' && !navigator.onLine) {
         created = await saveOffline('expenses', { ...payload, userId })
-        toast.error('📡 Offline. Expense saved and will sync when reconnected.')
+        toast.info('📡 Offline — expense saved on this phone and will sync when reconnected.')
       } else {
         created = await apiExpenses.create(payload, userId)
       }
-      // Update product stock on restock
-      if (isRestocking && form.restockProductId && form.restockQty > 0 && !isDemo) {
-        const prod = products.find(p => p.id === form.restockProductId)
-        if (prod) {
-          const newStock = prod.stock + +form.restockQty
-          await apiProducts.update(form.restockProductId, { ...prod, stock: newStock })
-          setProducts(ps => ps.map(p => p.id === form.restockProductId ? { ...p, stock: newStock } : p))
+      // Restock: add the units to the exact product / type, log it, keep the latest buy price
+      const qty = Math.trunc(+form.restockQty || 0)
+      if (isRestocking && form.restockProductId && qty > 0) {
+        const prod     = products.find(p => p.id === form.restockProductId)
+        const variant  = form.restockVariantId ? variants.find(v => v.id === form.restockVariantId) : null
+        const unitCost = +form.restockUnitPrice || 0
+        const offline  = !isDemo && typeof navigator !== 'undefined' && !navigator.onLine
+        try {
+          await applyStockChanges([{
+            productId: form.restockProductId, variantId: form.restockVariantId || null,
+            delta: qty, type: 'restock', unitCost: unitCost || null, reason: form.desc,
+          }], { products, variants, userId, isDemo, offline, stockReady, setProducts, setVariants, setMovements })
+
+          // Latest buy price → future sales calculate profit from it
+          if (prod && unitCost > 0 && unitCost !== pricesFor(prod, variant).buy && !offline) {
+            if (variant) {
+              if (!isDemo) await apiStock.setVariantBuyPrice(variant.id, unitCost)
+              setVariants(vs => vs.map(v => v.id === variant.id ? { ...v, buyPrice: unitCost } : v))
+            } else {
+              if (!isDemo) await apiProducts.setBuyPrice(prod.id, unitCost)
+              setProducts(ps => ps.map(p => p.id === prod.id ? { ...p, buyPrice: unitCost } : p))
+            }
+          }
+        } catch (e) {
+          toast.warn('Expense saved, but stock was not updated (' + e.message + '). Use Products → Stock → Adjust.')
         }
       }
       setExpenses(es => [created, ...es])
@@ -183,12 +225,30 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
               {/* Product info tiles — In Stock, Buy Price, Sell Price */}
               {selectedProduct && (
                 <>
+                  {typed && (
+                    <div style={{ marginTop:12 }}>
+                      <Lbl label="Type *" T={T}>
+                        <select value={form.restockVariantId} onChange={e => selectRestockVariant(e.target.value)} style={{ fontSize:13 }}>
+                          <option value="">-- Choose type --</option>
+                          {variantsOf(variants, selectedProduct.id).map(v => (
+                            <option key={v.id} value={v.id}>{v.name} — {v.stock} in stock</option>
+                          ))}
+                        </select>
+                      </Lbl>
+                    </div>
+                  )}
                   <div style={{ display:'flex', gap:8, marginTop:12, marginBottom:14 }}>
-                    <InfoTile label="In Stock"   value={selectedProduct.stock}               color={selectedProduct.stock > 5 ? GRN : selectedProduct.stock > 0 ? AMB : RED} T={T} />
-                    <InfoTile label="Buy Price"  value={cur(selectedProduct.buyPrice)}        color={AMB} T={T} />
-                    <InfoTile label="Sell Price" value={cur(selectedProduct.sellPrice)}       color={GRN} T={T} />
+                    <InfoTile label="In Stock"   value={currentStock}      color={currentStock > 5 ? GRN : currentStock > 0 ? AMB : RED} T={T} />
+                    <InfoTile label="Buy Price"  value={cur(prices.buy)}   color={AMB} T={T} />
+                    <InfoTile label="Sell Price" value={cur(prices.sell)}  color={GRN} T={T} />
                   </div>
 
+                  {!ready && (
+                    <div style={{ fontSize:12, color:T.textMuted, textAlign:'center', padding:'4px 0 6px' }}>
+                      Choose a type to continue.
+                    </div>
+                  )}
+                  {ready && (<>
                   <Divider label="Restock details" T={T} />
 
                   {/* Qty + Unit Price side by side */}
@@ -221,17 +281,25 @@ export default function Expenses({ expenses, setExpenses, products, setProducts,
                     </Lbl>
                   </div>
 
+                  {+form.restockUnitPrice > 0 && +form.restockUnitPrice !== prices.buy && (
+                    <div style={{ fontSize:11, color:AMB, marginTop:10, lineHeight:1.5 }}>
+                      Buy price{selectedVariant ? ` for ${selectedVariant.name}` : ''} will update from {cur(prices.buy)} to {cur(+form.restockUnitPrice)} —
+                      new sales use it to work out profit.
+                    </div>
+                  )}
+
                   {/* After-restock preview */}
                   <div style={{ marginTop:12, display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
                     <div style={{ background:T.bg, border:`1px solid ${T.border}`, borderRadius:9, padding:'8px 12px' }}>
                       <div style={{ fontSize:9, color:T.textMuted, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>Current Stock</div>
-                      <div className="mono" style={{ fontSize:16, fontWeight:800, color:T.textPrimary }}>{selectedProduct.stock}</div>
+                      <div className="mono" style={{ fontSize:16, fontWeight:800, color:T.textPrimary }}>{currentStock}</div>
                     </div>
                     <div style={{ background:GRN+'18', border:`1px solid ${GRN}44`, borderRadius:9, padding:'8px 12px' }}>
                       <div style={{ fontSize:9, color:GRN, fontWeight:700, textTransform:'uppercase', letterSpacing:.5, marginBottom:4 }}>After Restock</div>
                       <div className="mono" style={{ fontSize:16, fontWeight:800, color:GRN }}>+{form.restockQty} → {newStockAfterRestock}</div>
                     </div>
                   </div>
+                  </>)}
                 </>
               )}
             </div>
